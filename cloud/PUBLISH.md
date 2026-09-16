@@ -268,5 +268,21 @@ A：这些扩展是纯 JS + 自带多平台服务（`julia-analyzer` 内含 `ser
 **Q：`code --install-extension` 支持直接给 URL 吗？**
 A：不同版本行为不一致，本工具包统一**先下载再本地安装**，并对下载物做 SHA256 校验，更可靠。
 
+**Q：`git push` 报 TLS 握手失败/超时，但网页和 API 都正常？**
+A：多是本机代理按进程分流（`git.exe` 被直连，而 `powershell.exe`/浏览器走代理）导致的。
+两条路：
+1）把 `git.exe` 也加入代理，或直接给 git 配代理（本机代理端口 7897）：
+
+```powershell
+git -c http.proxy=http://127.0.0.1:7897 -c https.proxy=http://127.0.0.1:7897 push origin main
+```
+
+2）改走 GitHub API 推送（内容与本地提交**逐字节一致**，不会分叉）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\Push-ViaGitHubApi.ps1 -Repository StKGC/VScodeWithSyslab
+#   它会逐文件比对 blob SHA、tree SHA、commit SHA，全都相等才更新 refs/heads/main
+```
+
 **Q：机器没网/内网隔离怎么办？**
 A：把 `syslab-vscode-pack-<版本>.zip` 拷过去解压，然后

@@ -112,6 +112,7 @@ MWORKS\
 │   ├─ Pack-ExtensionRelease.ps1 生成「可上云」发布包（VSIX + manifest.json + SHA256SUMS）
 │   ├─ Install-ExtensionPack.ps1 从云端/本地发布包安装（下载 + 校验 + 安装 + 写环境）
 │   ├─ Publish-Marketplace.ps1   把桥接扩展上架 VS Code Marketplace（vsce + PAT）
+│   ├─ Push-ViaGitHubApi.ps1     git push 被网络阻断时，改用 GitHub API 推送（SHA 与本地一致，不分叉）
 │   ├─ Test-SyslabEnv.ps1       环境自检
 │   ├─ Run-SyslabScript.ps1     命令行运行 .jl 脚本（批处理/CI 可用）
 │   └─ check-syntax.js          开发辅助：校验扩展 JS/JSON 语法

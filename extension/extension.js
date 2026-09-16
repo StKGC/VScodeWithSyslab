@@ -13,6 +13,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const cp = require('child_process');
+const packagesLib = require('./lib/packages');
 
 const ENV_FILE_DEFAULT = path.join(os.homedir(), '.syslab-vscode', 'env.json');
 const CANDIDATE_ROOTS = [
@@ -288,9 +289,151 @@ function projectPath(env) {
     return env.defaultProject;
 }
 
+/**
+ * 预加载包列表：优先用 syslab.preloadPackages，为空时回退到 Syslab Julia 扩展的
+ * julia.syslab.preloadPkgs，保证两处设置任意一处生效都能对上。
+ */
 function preloadPackages() {
-    const pkgs = vscode.workspace.getConfiguration('syslab').get('preloadPackages') || [];
-    return pkgs.filter(p => !!p);
+    let pkgs = vscode.workspace.getConfiguration('syslab').get('preloadPackages');
+    if (!Array.isArray(pkgs) || pkgs.filter(p => !!p).length === 0) {
+        const fromJuliaExt = vscode.workspace.getConfiguration('julia').get('syslab.preloadPkgs');
+        if (Array.isArray(fromJuliaExt)) { pkgs = fromJuliaExt; }
+    }
+    return (Array.isArray(pkgs) ? pkgs : []).filter(p => !!p);
+}
+
+/**
+ * 把预加载包写入三处，使 REPL / 终端 profile / 环境自检保持一致：
+ *   1) syslab.preloadPackages        （本扩展：终端 profile、环境自检）
+ *   2) julia.syslab.preloadPkgs      （Syslab Julia 扩展：REPL 启动预加载）
+ *   3) terminal.integrated.profiles.* 里 “Syslab Julia” 的启动参数
+ */
+async function applyPreloadPackages(list) {
+    const packages = Array.from(new Set((list || []).map(p => String(p).trim()).filter(p => !!p)));
+    const configuration = vscode.workspace.getConfiguration();
+
+    await configuration.update('syslab.preloadPackages', packages, vscode.ConfigurationTarget.Global);
+    try {
+        await configuration.update('julia.syslab.preloadPkgs', packages, vscode.ConfigurationTarget.Global);
+    } catch (err) {
+        // Syslab Julia 扩展未安装时忽略
+    }
+    await syncTerminalProfiles(packages);
+    return packages;
+}
+
+/** 同步 “Syslab Julia” 终端配置文件的启动参数（保留其它 profile 与其它参数） */
+async function syncTerminalProfiles(packages) {
+    const configuration = vscode.workspace.getConfiguration();
+    const keys = [
+        'terminal.integrated.profiles.windows',
+        'terminal.integrated.profiles.linux',
+        'terminal.integrated.profiles.osx'
+    ];
+    for (const key of keys) {
+        const profiles = configuration.get(key);
+        if (!profiles || typeof profiles !== 'object' || !profiles['Syslab Julia']) { continue; }
+
+        const profile = Object.assign({}, profiles['Syslab Julia']);
+        const args = Array.isArray(profile.args) ? profile.args.slice() : [];
+        const cleaned = [];
+        for (let i = 0; i < args.length; i++) {
+            const arg = String(args[i]);
+            if (arg === '-e') { i++; continue; }                       // 丢掉旧的 -e 及其表达式
+            if (arg.startsWith('using ')) { continue; }                 // 兜底：裸的 using 表达式
+            cleaned.push(args[i]);
+        }
+        if (packages.length > 0) { cleaned.push('-e', `using ${packages.join(', ')}`); }
+        profile.args = cleaned;
+        profiles['Syslab Julia'] = profile;
+        try {
+            await configuration.update(key, profiles, vscode.ConfigurationTarget.Global);
+        } catch (err) { /* 忽略 */ }
+    }
+}
+
+/**
+ * 「Syslab: 选择预加载包」——多选列表，选项来自 Syslab 默认环境里实际可用的包。
+ */
+async function pickPreloadPackages() {
+    const env = resolveSyslab(false);
+    if (!env) {
+        vscode.window.showErrorMessage('未找到 MWORKS Syslab 环境，无法列出可预加载的包。');
+        return;
+    }
+
+    const envFiles = packagesLib.defaultEnvironmentFiles(env.depot, env.info.juliaVersion || '');
+    const projectPath = envFiles.projectPath || path.join(env.defaultProject, 'Project.toml');
+    const manifestPath = envFiles.manifestPath || path.join(env.defaultProject, 'Manifest.toml');
+    const available = packagesLib.listEnvironmentPackages(projectPath, manifestPath);
+
+    if (available.length === 0) {
+        vscode.window.showWarningMessage(
+            `没有从 ${projectPath} 读到包列表（该环境可能还没装包）。可先用 Syslab: 启动 Julia REPL 执行 Pkg.add(...)。`,
+            '启动 REPL'
+        ).then(choice => {
+            if (choice === '启动 REPL') { vscode.commands.executeCommand('syslab.startREPL'); }
+        });
+        return;
+    }
+
+    let selected = new Set(preloadPackages());
+    const manualLabel = '$(edit) 手动输入其它包名…';
+    let accepted = null;
+
+    // 允许“先勾选、再手动补充”，最多来回 3 轮
+    for (let round = 0; round < 3; round++) {
+        const items = available.map(pkg => ({
+            label: pkg.name,
+            description: pkg.version ? `v${pkg.version}` : (pkg.stdlib ? 'Julia 标准库' : '（环境内包）'),
+            detail: selected.has(pkg.name) ? '当前已预加载' : '',
+            picked: selected.has(pkg.name),
+            packageName: pkg.name
+        }));
+        items.unshift({ label: manualLabel, alwaysShow: true, packageName: null });
+
+        const picked = await vscode.window.showQuickPick(items, {
+            canPickMany: true,
+            title: `Syslab: 选择预加载包（默认环境 ${path.basename(path.dirname(projectPath))}，共 ${available.length} 个可选）`,
+            placeHolder: '勾选启动 REPL/终端时自动 using 的包，回车保存；勾选“手动输入”可补充列表外的包',
+            ignoreFocusOut: true
+        });
+        if (!picked) { return; }   // 用户取消
+
+        selected = new Set(picked.filter(item => item.packageName).map(item => item.packageName));
+
+        const wantsManual = picked.some(item => item.packageName === null);
+        if (!wantsManual) { accepted = picked; break; }
+
+        const input = await vscode.window.showInputBox({
+            title: '补充要预加载的包名（多个用逗号分隔）',
+            placeHolder: '例如 MyPkg, TyAppDesigner',
+            ignoreFocusOut: true
+        });
+        if (input === undefined) { return; }
+        for (const name of input.split(',').map(s => s.trim()).filter(Boolean)) { selected.add(name); }
+        accepted = null;
+    }
+    if (accepted === null && selected.size === 0) { return; }
+
+    const list = Array.from(selected);
+    await applyPreloadPackages(list);
+
+    const summary = list.length > 0 ? list.join(', ') : '（空）';
+    const choice = await vscode.window.showInformationMessage(
+        `预加载包已更新为：${summary}。已在运行的 REPL 需要重启才生效。`,
+        '重启 Julia REPL', '重新加载窗口'
+    );
+    if (choice === '重启 Julia REPL') {
+        const commands = await vscode.commands.getCommands(true);
+        if (commands.indexOf('language-julia.restartREPL') >= 0) {
+            await vscode.commands.executeCommand('language-julia.restartREPL');
+        } else {
+            vscode.commands.executeCommand('syslab.startREPL');
+        }
+    } else if (choice === '重新加载窗口') {
+        vscode.commands.executeCommand('workbench.action.reloadWindow');
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -710,6 +853,7 @@ async function activate(context) {
         vscode.commands.registerCommand('syslab.openInSyslab', openInSyslab),
         vscode.commands.registerCommand('syslab.showEnvironment', showEnvironment),
         vscode.commands.registerCommand('syslab.checkHealth', checkHealth),
+        vscode.commands.registerCommand('syslab.pickPreloadPackages', pickPreloadPackages),
         vscode.commands.registerCommand('syslab.openDepot', () => {
             const env = resolveSyslab(false);
             openFolder(env ? env.depot : '');

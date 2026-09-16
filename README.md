@@ -145,6 +145,7 @@ MWORKS\
 | `Syslab: 启动 / 关闭 Julia REPL` | 启动 `julia --project=…\environments\v1.10 -i`，默认预加载 TyBase/TyMath/TyPlot |
 | `Syslab: 用 MWORKS Syslab 打开当前文件` | 交给 Syslab 主程序打开 |
 | `Syslab: 环境自检` | 在新终端里打印 Julia 版本/环境并加载预置包 |
+| `Syslab: 选择预加载包…（多选）` | **图形化勾选** REPL/终端启动时预加载的包（选项来自当前环境的真实包列表），自动同步三处设置 |
 | `Syslab: 显示环境信息` | 输出通道里列出全部环境变量与关键文件检查 |
 | `Syslab: 打开 Depot / 安装目录` | 资源管理器中定位 |
 
@@ -301,6 +302,20 @@ powershell -ExecutionPolicy Bypass -File scripts\Publish-Marketplace.ps1
 ## 九、新增预加载库（REPL/终端启动时自动 `using`）
 
 “预加载”就是**启动 REPL/终端时自动执行 `using A, B, C`**。它在三个层面各有一份配置，按下顺序操作即可。
+
+### 做法 0（推荐，图形化勾选）：`Syslab: 选择预加载包…（多选）`
+
+命令面板执行 **`Syslab: 选择预加载包…（多选）`**：
+
+* 选项**来自当前 Syslab 默认环境的真实包列表**（读 `environments\v1.10\Project.toml` + `Manifest.toml`，
+  本机实测 156 个，带版本号；末尾附 LinearAlgebra/Statistics 等常用标准库）；
+* 已启用的包默认勾选，取消勾选即移除；
+* 想加载列表之外的包，勾选第一项 **“$(edit) 手动输入其它包名…”** 再填名字（逗号分隔）；
+* 确认后**一次性同步三处**：`syslab.preloadPackages`、`julia.syslab.preloadPkgs`、
+  `terminal.integrated.profiles.*` 里 “Syslab Julia” 的 `-e "using …"`；
+* 弹窗可直接点 **重启 Julia REPL** 或 **重新加载窗口** 让设置生效。
+
+> 与 Syslab 设置页里可选的预加载包等价，但选项是**动态从环境里读出来的**，不会出现“填了不存在的包导致 REPL 起不来”。
 
 ### 第 1 步（必须）：把包装进 **Syslab 的默认环境**
 

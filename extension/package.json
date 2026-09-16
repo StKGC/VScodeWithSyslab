@@ -2,7 +2,7 @@
   "name": "vscodewithsyslab",
   "displayName": "VScodeWithSyslab (MWORKS Syslab Bridge)",
   "description": "在原生 VS Code 中使用 MWORKS.Syslab 的 Julia / M 语言环境：运行脚本、启动 Syslab REPL、打开 Syslab、环境自检。",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "StKGC",
   "license": "MIT",
   "repository": {
@@ -41,6 +41,7 @@
     "onCommand:syslab.openInSyslab",
     "onCommand:syslab.showEnvironment",
     "onCommand:syslab.checkHealth",
+    "onCommand:syslab.pickPreloadPackages",
     "onCommand:syslab.openDepot",
     "onCommand:syslab.openInstallDir"
   ],
@@ -93,6 +94,12 @@
         "command": "syslab.openDepot",
         "title": "Syslab: 打开 Julia Depot 目录",
         "category": "Syslab"
+      },
+      {
+        "command": "syslab.pickPreloadPackages",
+        "title": "Syslab: 选择预加载包…（多选）",
+        "category": "Syslab",
+        "icon": "$(checklist)"
       },
       {
         "command": "syslab.openInstallDir",
@@ -181,7 +188,7 @@
             "TyMath",
             "TyPlot"
           ],
-          "markdownDescription": "启动 Syslab REPL 时预加载的包。"
+          "markdownDescription": "启动 Syslab REPL / 终端时预加载（自动 `using`）的包，与 Syslab Julia 扩展的 `julia.syslab.preloadPkgs` 保持同步。\n\n推荐用命令面板的 **`Syslab: 选择预加载包…（多选）`** 从当前环境实际可用的包中勾选；包必须先装进 Syslab 默认环境（`Pkg.add`）。"
         },
         "syslab.repl.envMode": {
           "type": "string",

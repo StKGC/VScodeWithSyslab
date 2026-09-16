@@ -298,7 +298,106 @@ powershell -ExecutionPolicy Bypass -File scripts\Publish-Marketplace.ps1
 
 ---
 
-## 九、实测记录
+## 九、新增预加载库（REPL/终端启动时自动 `using`）
+
+“预加载”就是**启动 REPL/终端时自动执行 `using A, B, C`**。它在三个层面各有一份配置，按下顺序操作即可。
+
+### 第 1 步（必须）：把包装进 **Syslab 的默认环境**
+
+预加载的包必须能在 Syslab 的活动环境（默认 `JULIA_DEPOT_PATH\environments\v1.10`）里被解析，
+否则 REPL 启动就会报 `ArgumentError: Package xxx not found`。
+
+```powershell
+# 打开带 Syslab 环境的 Julia REPL
+bin\Syslab-Shell.cmd
+julia> using Pkg
+julia> Pkg.add("MyPkg")                       # 从注册表安装
+julia> Pkg.develop(path="D:\\my\\MyPkg.jl")   # 或装本地开发包（会写进同一个环境）
+julia> using MyPkg                            # 验证能加载
+```
+
+也可以不改脚本、直接命令行验证（用我们注入的环境）：
+
+```powershell
+# 复制成 check.jl 内容是： using MyPkg
+powershell -File scripts\Run-SyslabScript.ps1 .\check.jl
+```
+
+> Depot 是 `C:\Users\Public\TongYuan\.julia`；`Pkg.add` 默认装进环境 `@v1.10`（就是 Syslab 的默认环境）。
+> 装到别的环境（例如项目环境）不会影响这里的预加载。
+
+### 第 2 步：VS Code 侧配置（二选一）
+
+**做法 A（推荐，一条命令写全三处）**：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1 -SkipExtensions `
+    -PreloadPackages TyBase,TyMath,TyPlot,MyPkg
+```
+
+它会同时写入：
+
+| 设置 / 位置 | 作用 |
+| --- | --- |
+| `julia.syslab.preloadPkgs` | Syslab Julia 扩展启动 REPL 时加载 |
+| `syslab.preloadPackages` | 桥接扩展：`Syslab Julia` 终端 profile、`Syslab: 环境自检` |
+| `terminal.integrated.profiles.windows["Syslab Julia"].args` 的 `-e "using ..."` | 手动选该终端时加载 |
+
+**做法 B（手工改设置）**：命令面板 → `Preferences: Open User Settings (JSON)`，加/改这三处：
+
+```jsonc
+{
+  "julia.syslab.preloadPkgs": ["TyBase", "TyMath", "TyPlot", "MyPkg"],
+  "syslab.preloadPackages":   ["TyBase", "TyMath", "TyPlot", "MyPkg"],
+  "terminal.integrated.profiles.windows": {
+    "Syslab Julia": {
+      "path": "C:/Users/Public/TongYuan/julia-1.10.10/bin/julia.exe",
+      "args": ["--project=C:/Users/Public/TongYuan/.julia/environments/v1.10",
+               "-i", "--banner=no", "-e", "using TyBase, TyMath, TyPlot, MyPkg"],
+      "icon": "beaker"
+    }
+  }
+}
+```
+
+改完 `Developer: Reload Window` 生效；验证：命令面板 `Syslab: 环境自检`（会实际 `using` 一遍并打印结果）。
+
+### 第 3 步：MWORKS Syslab 主程序侧（如果要让 Syslab IDE 也预加载）
+
+Syslab 有自己的用户设置，与 VS Code 是两份：
+
+```
+%APPDATA%\Syslab\User\settings.json        # 加 "julia.syslab.preloadPkgs": ["TyBase","TyMath","TyPlot","MyPkg"]
+```
+
+### 可选：让**所有** Julia 会话（含脚本、批处理、CI）都预加载
+
+在 depot 里放启动文件（对未加 `--startup-file=no` 的进程都生效）：
+
+```julia
+# C:\Users\Public\TongYuan\.julia\config\startup.jl
+try
+    using TyBase, TyMath, TyPlot, MyPkg
+catch err
+    @warn "预加载失败" exception = err      # 用 try/catch 避免一个包坏了整个 REPL 起不来
+end
+```
+
+注意：启动会变慢（每个 Julia 进程都要加载）；出错会拖慢甚至中断会话，所以建议包 `try/catch`。
+Syslab 的 REPL/调试器可能带 `--startup-file=no`，那种情况下以“第 2 步的设置”为准。
+
+### 进阶：包多/包大时用自定义系统镜像
+
+预加载越多，REPL 冷启动越慢。Syslab 支持把常用包编译进系统镜像：
+
+* 设置 `julia.syslab.customSysimagePath` 指向镜像文件；
+* 命令面板执行 `Syslab: Build System Image`（或 `Syslab: Edit Build Image Script` 先改脚本）再 `Syslab: Use New System Image`。
+
+这样预加载几乎不花时间（镜像里已编译好），代价是打包/更新镜像需要几分钟。
+
+---
+
+## 十、实测记录
 
 ```
 > powershell -File scripts\Run-SyslabScript.ps1 samples\quick_start.jl

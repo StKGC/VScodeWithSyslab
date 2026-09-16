@@ -25,6 +25,11 @@
 .PARAMETER UserSettingsDir
     VS Code 用户设置目录，默认 %APPDATA%\Code\User。
 
+.PARAMETER PreloadPackages
+    REPL / 终端启动时预加载的 Julia 包列表，默认 TyBase, TyMath, TyPlot。
+    会同时写入 VS Code 的 julia.syslab.preloadPkgs、syslab.preloadPackages 与
+    “Syslab Julia” 终端配置文件的启动参数。**这些包必须已装在 Syslab 默认环境**（@v1.10）里。
+
 .PARAMETER IncludeCopilot
     一并安装 MWORKS Copilot 扩展（需要 Syslab 账号与服务器，默认不装）。
 
@@ -39,6 +44,12 @@
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File install.ps1 -SyslabHome "D:\Math\MWORKS\Syslab\Syslab 2026b" -IncludeCopilot
+
+.EXAMPLE
+    # 新增一个预加载包（先用 Syslab 的 Julia 把包装进默认环境，再重跑安装脚本）
+    powershell -ExecutionPolicy Bypass -File bin\Start-SyslabShell.ps1     # 在 REPL 里 Pkg.add("MyPkg")
+    powershell -ExecutionPolicy Bypass -File install.ps1 -SkipExtensions `
+        -PreloadPackages TyBase,TyMath,TyPlot,MyPkg
 #>
 [CmdletBinding()]
 param(
@@ -46,6 +57,7 @@ param(
     [string]$VSCodeExe,
     [string]$ExtensionsDir,
     [string]$UserSettingsDir,
+    [string[]]$PreloadPackages = @('TyBase', 'TyMath', 'TyPlot'),   # REPL/终端启动时预加载的 Julia 包
     [switch]$IncludeCopilot,
     [switch]$SkipExtensions,
     [switch]$SkipSettings
@@ -319,10 +331,17 @@ if (-not $SkipSettings) {
         $terminalEnv[$key] = [string]$values[$key]
     }
 
+    # -File 调用时 "A,B,C" 会作为单个字符串传入：统一拆分/去空白，兼容数组与逗号串两种写法
+    $preloadList = @($PreloadPackages | ForEach-Object { ([string]$_ -split ',') } |
+            ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($preloadList.Count -eq 0) { $preloadList = @('TyBase', 'TyMath', 'TyPlot') }
+    $preloadExpr = 'using ' + ($preloadList -join ', ')
+
     Set-SettingDeep $settings 'julia.executablePath' $juliaExeFwd
     Set-SettingDeep $settings 'julia.syslab.logPath' ([string]$info.LogsPath)
     Set-SettingDeep $settings 'julia.syslab.simulationResultPath' ''
-    Set-SettingDeep $settings 'julia.syslab.preloadPkgs' @('TyBase', 'TyMath', 'TyPlot')
+    Set-SettingDeep $settings 'julia.syslab.preloadPkgs' $preloadList          # Syslab Julia 扩展（REPL 启动时加载）
+    Set-SettingDeep $settings 'syslab.preloadPackages' $preloadList            # 桥接扩展（终端 profile / 环境自检）
     Set-SettingDeep $settings 'julia.syslab.repl.defaultStart' $true
     Set-SettingDeep $settings 'syslab.envFile' $envJsonPath
     Set-SettingDeep $settings 'syslab.juliaExecutable' $juliaExeFwd
@@ -337,10 +356,11 @@ if (-not $SkipSettings) {
     $profiles = $settings['terminal.integrated.profiles.windows']
     $profiles['Syslab Julia'] = [ordered]@{
         path = $juliaExeFwd
-        args = @("--project=$projectDirFwd", '-i', '--banner=no', '-e', 'using TyBase, TyMath, TyPlot')
+        args = @("--project=$projectDirFwd", '-i', '--banner=no', '-e', $preloadExpr)
         env  = $terminalEnv
         icon = 'beaker'
     }
+    Write-Ok ("预加载包    : {0}" -f ($preloadList -join ', '))
 
     # .tym 关联到 M 语言（不覆盖 .m，避免与 MATLAB 扩展冲突）
     if (-not $settings.ContainsKey('files.associations')) { $settings['files.associations'] = @{} }

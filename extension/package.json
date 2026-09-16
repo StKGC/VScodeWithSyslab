@@ -1,0 +1,198 @@
+{
+  "name": "syslab-bridge",
+  "displayName": "MWORKS Syslab Bridge",
+  "description": "在原生 VS Code 中使用 MWORKS.Syslab 的 Julia / M 语言环境：运行脚本、启动 Syslab REPL、打开 Syslab、环境自检。",
+  "version": "1.0.0",
+  "publisher": "StKGC",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "syslab",
+    "mworks",
+    "julia",
+    "tybase",
+    "typlot"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "*",
+    "onStartupFinished",
+    "onLanguage:julia",
+    "onLanguage:mlang",
+    "onCommand:syslab.runFile",
+    "onCommand:syslab.runFileInREPL",
+    "onCommand:syslab.runSelection",
+    "onCommand:syslab.startREPL",
+    "onCommand:syslab.stopREPL",
+    "onCommand:syslab.openInSyslab",
+    "onCommand:syslab.showEnvironment",
+    "onCommand:syslab.checkHealth",
+    "onCommand:syslab.openDepot",
+    "onCommand:syslab.openInstallDir"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "syslab.runFile",
+        "title": "Syslab: 运行当前脚本（新进程）",
+        "category": "Syslab",
+        "icon": "$(play)"
+      },
+      {
+        "command": "syslab.runFileInREPL",
+        "title": "Syslab: 在 REPL 中运行当前脚本",
+        "category": "Syslab",
+        "icon": "$(run)"
+      },
+      {
+        "command": "syslab.runSelection",
+        "title": "Syslab: 运行选中代码",
+        "category": "Syslab"
+      },
+      {
+        "command": "syslab.startREPL",
+        "title": "Syslab: 启动 Julia REPL",
+        "category": "Syslab",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "syslab.stopREPL",
+        "title": "Syslab: 关闭 Julia REPL",
+        "category": "Syslab"
+      },
+      {
+        "command": "syslab.openInSyslab",
+        "title": "Syslab: 用 MWORKS Syslab 打开当前文件",
+        "category": "Syslab"
+      },
+      {
+        "command": "syslab.showEnvironment",
+        "title": "Syslab: 显示环境信息",
+        "category": "Syslab"
+      },
+      {
+        "command": "syslab.checkHealth",
+        "title": "Syslab: 环境自检",
+        "category": "Syslab"
+      },
+      {
+        "command": "syslab.openDepot",
+        "title": "Syslab: 打开 Julia Depot 目录",
+        "category": "Syslab"
+      },
+      {
+        "command": "syslab.openInstallDir",
+        "title": "Syslab: 打开 Syslab 安装目录",
+        "category": "Syslab"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "syslab.runFile",
+          "when": "resourceLangId == julia || resourceLangId == mlang",
+          "group": "Syslab@1"
+        },
+        {
+          "command": "syslab.runFileInREPL",
+          "when": "resourceLangId == julia || resourceLangId == mlang",
+          "group": "Syslab@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "syslab.runFile",
+          "when": "resourceLangId == julia || resourceLangId == mlang",
+          "group": "syslab@1"
+        },
+        {
+          "command": "syslab.runFileInREPL",
+          "when": "resourceLangId == julia || resourceLangId == mlang",
+          "group": "syslab@2"
+        },
+        {
+          "command": "syslab.runSelection",
+          "when": "editorHasSelection && (resourceLangId == julia || resourceLangId == mlang)",
+          "group": "syslab@3"
+        },
+        {
+          "command": "syslab.openInSyslab",
+          "when": "resourceLangId == julia || resourceLangId == mlang",
+          "group": "syslab@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "syslab.runFile",
+          "when": "resourceLangId == julia || resourceLangId == mlang || editorLangId == julia || editorLangId == mlang"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "syslab.runFile",
+        "key": "ctrl+f5",
+        "when": "editorTextFocus && (editorLangId == julia || editorLangId == mlang)"
+      }
+    ],
+    "configuration": {
+      "title": "MWORKS Syslab Bridge",
+      "type": "object",
+      "properties": {
+        "syslab.envFile": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Syslab 环境变量文件（由 `install.ps1` 生成，默认 `%USERPROFILE%\\.syslab-vscode\\env.json`）。留空表示使用默认路径，缺失时扩展会自行搜索 Syslab 安装。",
+          "scope": "machine"
+        },
+        "syslab.juliaExecutable": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "julia 可执行文件路径。留空表示使用 Syslab 自带的 Julia（`JULIA_HOME\\bin\\julia.exe`）。",
+          "scope": "machine-overridable"
+        },
+        "syslab.projectPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "运行脚本时使用的 Julia 环境（`--project=`）路径。留空表示使用 Syslab 默认环境（`JULIA_DEPOT_PATH\\environments\\v1.10`）。",
+          "scope": "machine-overridable"
+        },
+        "syslab.preloadPackages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "TyBase",
+            "TyMath",
+            "TyPlot"
+          ],
+          "markdownDescription": "启动 Syslab REPL 时预加载的包。"
+        },
+        "syslab.repl.envMode": {
+          "type": "string",
+          "enum": [
+            "syslab",
+            "project"
+          ],
+          "default": "syslab",
+          "markdownDescription": "REPL/脚本使用的环境：`syslab` = Syslab 默认环境，`project` = 当前工作区。"
+        },
+        "syslab.syslabExecutable": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "MWORKS Syslab 主程序 `Syslab.exe` 路径（用于“用 Syslab 打开”）。留空自动探测。",
+          "scope": "machine"
+        }
+      }
+    }
+  },
+  "scripts": {},
+  "dependencies": {}
+}

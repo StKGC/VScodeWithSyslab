@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------------------
+# MWORKS Syslab × VS Code 集成工具包
+#
+# 仓库策略：
+#   * release/  —— 发布包（5 个 VSIX + manifest.json + SHA256SUMS），进仓库，
+#                  这样任何机器可以直接：
+#                    Install-ExtensionPack.ps1 -Source https://github.com/<你>/<仓库>/raw/main/release/manifest.json
+#                    ./install.sh --base-url https://github.com/<你>/<仓库>/raw/main/release
+#   * 若不想把二进制放进 git 历史，把 /release/ 也加进忽略，改用 GitHub Releases 附件分发。
+# ---------------------------------------------------------------------------
+
+# 本机构建缓存（每次打包都会重新生成，不必入库）
+/vsix/
+
+# 打包出来的 zip（与 release/ 内容重复，如需分发请上传到 GitHub Releases）
+/*.zip
+
+# 示例脚本生成的图片
+/samples/sin_wave.jpg
+/samples/sin_wave.png
+
+# 本机备份 / 临时文件
+*.bak
+*.syslab-bak
+*.tmp
+Thumbs.db
+desktop.ini

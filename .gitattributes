@@ -1,0 +1,28 @@
+# 统一行尾，避免跨平台（Windows / Linux / macOS）拉取后脚本无法执行
+* text=auto
+
+# 脚本行尾：sh 必须 LF，cmd/ps1 用 CRLF
+*.sh    text eol=lf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+*.js    text eol=lf
+*.json  text eol=lf
+*.jl    text eol=lf
+*.m     text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.yml   text eol=lf
+*.xml   text eol=lf
+
+# 二进制：不要做任何转换
+*.vsix  binary
+*.zip   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.exe   binary
+*.dll   binary
+
+# 不要把 release/ 下的 VSIX 当成文本做 diff
+release/** -diff

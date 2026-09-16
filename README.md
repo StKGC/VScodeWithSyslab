@@ -113,6 +113,8 @@ MWORKS\
 │   ├─ Install-ExtensionPack.ps1 从云端/本地发布包安装（下载 + 校验 + 安装 + 写环境）
 │   ├─ Publish-Marketplace.ps1   把桥接扩展上架 VS Code Marketplace（vsce + PAT）
 │   ├─ Push-ViaGitHubApi.ps1     git push 被网络阻断时，改用 GitHub API 推送（SHA 与本地一致，不分叉）
+│   ├─ Update-PreloadEnum.ps1    按当前环境刷新「预加载包」设置页的下拉候选（enum）
+│   ├─ update-preload-enum.js    上者的 Node 实现（安全改写已安装扩展的 package.json）
 │   ├─ Test-SyslabEnv.ps1       环境自检
 │   ├─ Run-SyslabScript.ps1     命令行运行 .jl 脚本（批处理/CI 可用）
 │   └─ check-syntax.js          开发辅助：校验扩展 JS/JSON 语法
@@ -317,6 +319,16 @@ powershell -ExecutionPolicy Bypass -File scripts\Publish-Marketplace.ps1
 * 弹窗可直接点 **重启 Julia REPL** 或 **重新加载窗口** 让设置生效。
 
 > 与 Syslab 设置页里可选的预加载包等价，但选项是**动态从环境里读出来的**，不会出现“填了不存在的包导致 REPL 起不来”。
+
+### 做法 0′（不打开命令面板）：设置页的下拉候选
+
+`设置 → 搜索 syslab.preloadPackages` 也可以选，下拉候选来自扩展清单里的 `items.enum`：
+
+* 安装包内置 **42 个常用包**（Ty* 核心 + DataFrames/CSV/Revit 等生态常见包 + 常用标准库）；
+* 运行 `install.ps1`（或单独执行 `scripts\Update-PreloadEnum.ps1`）后会**按本机环境刷新成完整候选**
+  （本机实测 **42 → 156 个**，与默认环境 `[deps]` 一致），所以下拉里每一项都保证能在你的环境里 `using`；
+* 用 `Pkg.add` 装了新包之后，再跑一次 `Update-PreloadEnum.ps1` 即可让它出现在下拉里；
+* 下拉之外的自定义包：用上面的多选命令，或直接在 `settings.json` 里写（设置页会提示“不在候选列表中”，但能生效）。
 
 ### 第 1 步（必须）：把包装进 **Syslab 的默认环境**
 

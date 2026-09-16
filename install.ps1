@@ -282,6 +282,18 @@ if (-not $SkipExtensions) {
             if ($listed -match [regex]::Escape($id)) { Write-Ok "VS Code 已识别 $id" }
             else { Write-Warn2 "VS Code 未识别 $id（可稍后在扩展面板中确认）" }
         }
+
+        # 4.6 按当前环境刷新「预加载包」下拉候选（enum），让设置页里只出现本机真能 using 的包
+        $enumScript = Join-Path $KitRoot 'scripts\Update-PreloadEnum.ps1'
+        if (Test-Path $enumScript) {
+            try {
+                & powershell -NoProfile -ExecutionPolicy Bypass -File $enumScript -ExtensionsDir $ExtensionsDir |
+                    ForEach-Object { Write-Host "  $_" }
+            }
+            catch {
+                Write-Warn2 "刷新预加载候选失败（不影响安装）：$($_.Exception.Message)"
+            }
+        }
     }
     else {
         Write-Warn2 '未找到 code.cmd，退回到复制扩展目录的方式（仅旧版 VS Code 有效）'

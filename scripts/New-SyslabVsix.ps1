@@ -175,9 +175,8 @@ $contentTypes = @'
 '@
 Set-Content -LiteralPath (Join-Path $staging '[Content_Types].xml') -Value $contentTypes -Encoding UTF8
 
-# ---- 压缩为 VSIX ----
-[System.IO.Compression.ZipFile]::CreateFromDirectory(
-    $staging, $vsixPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+# ---- 压缩为 VSIX（条目统一用正斜杠，保证 Linux/macOS 上也能正确解压） ----
+New-ZipArchiveFromDirectory -SourceDir $staging -ZipPath $vsixPath | Out-Null
 
 $sizeMb = [Math]::Round((Get-Item $vsixPath).Length / 1MB, 1)
 Write-Host "  生成  ：$vsixPath ($sizeMb MB)" -ForegroundColor Green

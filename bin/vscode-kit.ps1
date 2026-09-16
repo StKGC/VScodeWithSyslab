@@ -368,3 +368,52 @@ function Repair-ExtensionCache {
     [System.IO.File]::WriteAllText($cachePath, $out, [System.Text.UTF8Encoding]::new($false))
     return $removed
 }
+
+# ---------------------------------------------------------------------------
+# 用「正斜杠」条目名打包 zip
+#
+# .NET Framework 的 ZipFile::CreateFromDirectory 在 Windows 上会把条目名写成
+# `extension\package.json`（反斜杠）。这样的包在 Windows 上能被 VS Code 正常解压，
+# 但在 Linux/macOS 上会被解成名字里带反斜杠的文件而安装失败，`unzip` 也一样。
+# 因此这里自己写条目，统一用 `/`，保证 VSIX 与发布包跨平台可用。
+# ---------------------------------------------------------------------------
+function New-ZipArchiveFromDirectory {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$SourceDir,
+        [Parameter(Mandatory)][string]$ZipPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression | Out-Null
+    Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
+
+    $source = (Resolve-Path $SourceDir).Path.TrimEnd('\', '/')
+    $parent = Split-Path -Parent $ZipPath
+    if ($parent -and -not (Test-Path $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+    if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
+
+    $minTime = [datetime]::new(1980, 1, 1, 0, 0, 0)
+    $maxTime = [datetime]::new(2107, 12, 31, 23, 59, 58)
+
+    $zip = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $prefixLength = $source.Length + 1
+        foreach ($file in (Get-ChildItem $source -Recurse -File | Sort-Object FullName)) {
+            $relative = $file.FullName.Substring($prefixLength).Replace('\', '/')
+            $entry = $zip.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
+            $stamp = $file.LastWriteTime
+            if ($stamp -lt $minTime) { $stamp = $minTime }
+            if ($stamp -gt $maxTime) { $stamp = $maxTime }
+            $entry.LastWriteTime = $stamp
+            $entryStream = $entry.Open()
+            try {
+                $fileStream = [System.IO.File]::OpenRead($file.FullName)
+                try { $fileStream.CopyTo($entryStream) } finally { $fileStream.Dispose() }
+            }
+            finally { $entryStream.Dispose() }
+        }
+    }
+    finally { $zip.Dispose() }
+
+    return $ZipPath
+}

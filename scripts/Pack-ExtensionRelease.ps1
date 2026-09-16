@@ -144,11 +144,8 @@ $sumPath = Join-Path $ReleaseDir 'SHA256SUMS.txt'
 # 4. 可选：打成 zip
 # ---------------------------------------------------------------------------
 if ($Zip) {
-    Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
     $zipPath = Join-Path $kitRoot ("syslab-vscode-pack-$PackVersion.zip")
-    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $ReleaseDir, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+    New-ZipArchiveFromDirectory -SourceDir $ReleaseDir -ZipPath $zipPath | Out-Null
     Write-Host ("  [OK] {0}  {1:N1} MB" -f [System.IO.Path]::GetFileName($zipPath), ((Get-Item $zipPath).Length / 1MB))
 }
 

@@ -1,4 +1,7 @@
-# MWORKS Syslab → VS Code 集成工具包
+# VScodeWithSyslab
+
+> 项目名 / 仓库名：**VScodeWithSyslab** ｜ 扩展 ID：`StKGC.syslab-bridge`（安装后显示为 `stkgc.syslab-bridge`）
+> 仓库：https://github.com/BlackTea-Lee/VScodeWithSyslab （私有）
 
 让 **MWORKS.Syslab** 的编辑器与脚本运行能力在**原生 VS Code** 里可用：
 用 VS Code 打开/编辑 `.jl`、`.m/.tym` 文件，直接调用 Syslab 自带的 Julia 运行时与全部
@@ -262,8 +265,8 @@ git clone https://github.com/<你>/<仓库>.git
 scripts\Install-ExtensionPack.ps1 -Source .\<仓库>\release        # Linux/macOS: ./install.sh --vsix-dir ./<仓库>/release
 ```
 
-> 本仓库已推到 `https://github.com/BlackTea-Lee/desktop-tutorial`，`release/` 随仓库一起提交；
-> 该仓库目前是**私有**的，所以其它机器请用上面的「克隆 + 本地目录」方式，
+> 本仓库已推到 `https://github.com/BlackTea-Lee/VScodeWithSyslab`（项目名 / 仓库名：**VScodeWithSyslab**），
+> `release/` 随仓库一起提交；该仓库目前是**私有**的，所以其它机器请用上面的「克隆 + 本地目录」方式，
 > 或在 GitHub 上把仓库改成 Public 后直接用 raw 链接。
 
 **把桥接扩展上架市场（可选，上架后扩展面板可搜索 + Settings Sync 自动同步）**：

@@ -7,11 +7,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BlackTea-Lee/desktop-tutorial.git"
+    "url": "https://github.com/BlackTea-Lee/VScodeWithSyslab.git"
   },
-  "homepage": "https://github.com/BlackTea-Lee/desktop-tutorial#readme",
+  "homepage": "https://github.com/BlackTea-Lee/VScodeWithSyslab#readme",
   "bugs": {
-    "url": "https://github.com/BlackTea-Lee/desktop-tutorial/issues"
+    "url": "https://github.com/BlackTea-Lee/VScodeWithSyslab/issues"
   },
   "engines": {
     "vscode": "^1.75.0"

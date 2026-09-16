@@ -252,11 +252,19 @@ powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -Pack
 
 # ③ 其它机器（Windows）：下载 + 校验 + 安装 + 写环境，一步到位
 powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 -Source https://<你的地址>/syslab-pack/
-#    只装桥接扩展：加 -OnlyBridge ；私有仓库：加 -Token $env:GH_TOKEN
+#    只装桥接扩展：加 -OnlyBridge
 
 # ③ 其它机器（Linux / macOS）
 ./install.sh --base-url https://<你的地址>/syslab-pack/
+
+# ④ 私有 GitHub 仓库（匿名 raw 会 404）：克隆后用本地目录安装，凭据交给 git 即可
+git clone https://github.com/<你>/<仓库>.git
+scripts\Install-ExtensionPack.ps1 -Source .\<仓库>\release        # Linux/macOS: ./install.sh --vsix-dir ./<仓库>/release
 ```
+
+> 本仓库已推到 `https://github.com/BlackTea-Lee/desktop-tutorial`，`release/` 随仓库一起提交；
+> 该仓库目前是**私有**的，所以其它机器请用上面的「克隆 + 本地目录」方式，
+> 或在 GitHub 上把仓库改成 Public 后直接用 raw 链接。
 
 **把桥接扩展上架市场（可选，上架后扩展面板可搜索 + Settings Sync 自动同步）**：
 

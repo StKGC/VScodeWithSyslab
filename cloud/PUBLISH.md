@@ -59,16 +59,44 @@ powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -Pack
 
 ## 3. 上传到云端
 
+### 3.0 本仓库现成的方式（仓库内已带 release/）
+
+本工具包仓库自身就是发布源，`release/` 已随仓库提交（VSIX + manifest.json + SHA256SUMS）。
+
+**公开仓库**（推荐，其它机器零凭据一条命令）：
+
+```powershell
+# Windows
+scripts\Install-ExtensionPack.ps1 -Source https://github.com/<你>/<仓库>/raw/main/release/manifest.json
+# Linux / macOS
+./install.sh --base-url https://github.com/<你>/<仓库>/raw/main/release
+```
+
+**私有仓库**（匿名 raw 会返回 404，用下面两种方式之一）：
+
+```powershell
+# 方式 A（推荐）：用 git 克隆后再本地安装，凭据交给 git/GCM，不用手管 Token
+git clone https://github.com/<你>/<仓库>.git
+scripts\Install-ExtensionPack.ps1 -Source .\<仓库>\release
+#   Linux / macOS： ./install.sh --vsix-dir ./<仓库>/release
+
+# 方式 B：给 raw 直链带 PAT（classic PAT 用 token 前缀，fine-grained 用 Bearer）
+scripts\Install-ExtensionPack.ps1 `
+  -Source https://raw.githubusercontent.com/<你>/<仓库>/main/release/manifest.json `
+  -Token $env:GH_TOKEN
+```
+
+> 判断仓库是公开还是私有：浏览器无痕窗口打开
+> `https://raw.githubusercontent.com/<你>/<仓库>/main/release/manifest.json`，
+> 能看到 JSON 就是公开；404 则是私有。
+> 想让所有人（或没有 git 凭据的机器）直接下载，把仓库改成 Public 即可
+> （Settings → General → Danger Zone → Change visibility）。
+
 ### 3.1 GitHub Release
 
 ```bash
-# 一次性：建仓库（私有也可）
-git init syslab-vscode-pack && cd syslab-vscode-pack
-git remote add origin https://github.com/<你>/syslab-vscode-pack.git
-
-# 每次发版
-cp -r /path/to/release/* .
-git add . && git commit -m "pack 2026.0916" && git push -u origin main
+# 一次性
+git remote add origin https://github.com/<你>/<仓库>.git
 
 # 打 tag + Release，界面上把 release 目录里的文件作为附件上传（或用 gh CLI）
 git tag v2026.0916 && git push origin v2026.0916
@@ -79,7 +107,7 @@ git tag v2026.0916 && git push origin v2026.0916
 
 ```powershell
 # GitHub Release 附件直链（公开）
-scripts\Install-ExtensionPack.ps1 -Source https://github.com/<你>/syslab-vscode-pack/releases/download/v2026.0916/manifest.json
+scripts\Install-ExtensionPack.ps1 -Source https://github.com/<你>/<仓库>/releases/download/v2026.0916/manifest.json
 # 私有仓库
 scripts\Install-ExtensionPack.ps1 -Source https://github.com/... -Token $env:GH_TOKEN
 ```

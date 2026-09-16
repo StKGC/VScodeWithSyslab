@@ -14,6 +14,7 @@ const os = require('os');
 const path = require('path');
 const cp = require('child_process');
 const packagesLib = require('./lib/packages');
+const completionLib = require('./lib/completion');
 
 const ENV_FILE_DEFAULT = path.join(os.homedir(), '.syslab-vscode', 'env.json');
 const CANDIDATE_ROOTS = [
@@ -300,6 +301,143 @@ function preloadPackages() {
         if (Array.isArray(fromJuliaExt)) { pkgs = fromJuliaExt; }
     }
     return (Array.isArray(pkgs) ? pkgs : []).filter(p => !!p);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 代码补全（离线索引：由 scripts\Build-CompletionIndex.ps1 生成）              */
+/* -------------------------------------------------------------------------- */
+
+const COMPLETION_KIND_MAP = {
+    function: vscode.CompletionItemKind.Function,
+    type: vscode.CompletionItemKind.Class,
+    module: vscode.CompletionItemKind.Module,
+    const: vscode.CompletionItemKind.Constant,
+    value: vscode.CompletionItemKind.Variable
+};
+
+let completionIndexCache = { file: null, mtime: 0, data: null };
+let completionHintShown = false;
+
+function completionIndexPath() {
+    const configured = vscode.workspace.getConfiguration('syslab').get('completion.file');
+    if (configured) { return String(configured).replace(/^~/, os.homedir()); }
+    return path.join(os.homedir(), '.syslab-vscode', 'completion.json');
+}
+
+/** 读取补全索引（按文件 mtime 自动感知重建，无需重载窗口） */
+function getCompletionIndex() {
+    const file = completionIndexPath();
+    let mtime = 0;
+    try { mtime = fs.statSync(file).mtimeMs; } catch (err) { mtime = 0; }
+    if (completionIndexCache.data && completionIndexCache.file === file && completionIndexCache.mtime === mtime) {
+        return completionIndexCache.data;
+    }
+    const data = completionLib.loadIndex(file);
+    completionIndexCache = { file: file, mtime: mtime, data: data };
+    return data;
+}
+
+/** 第一次需要补全但索引缺失时，提示一次并给出按钮 */
+function hintCompletionIndex() {
+    if (completionHintShown) { return; }
+    completionHintShown = true;
+    vscode.window.showInformationMessage(
+        '还没有 Julia 补全索引（completion.json）。生成一次即可获得 TyBase/TyMath/TyPlot 等包的自动补全。',
+        '生成索引', '不再提示'
+    ).then(choice => {
+        if (choice === '生成索引') { vscode.commands.executeCommand('syslab.buildCompletionIndex'); }
+    });
+}
+
+/** 工具包里的脚本路径（安装时写入 syslab.kitPath） */
+function kitScriptPath(fileName) {
+    const kitPath = vscode.workspace.getConfiguration('syslab').get('kitPath');
+    if (!kitPath) { return null; }
+    const candidate = path.join(String(kitPath), 'scripts', fileName);
+    return fs.existsSync(candidate) ? candidate : null;
+}
+
+/** 在终端里生成/更新补全索引 */
+function buildCompletionIndex() {
+    const script = kitScriptPath('Build-CompletionIndex.ps1');
+    if (!script) {
+        vscode.window.showWarningMessage(
+            '未找到 Build-CompletionIndex.ps1。请设置 syslab.kitPath 指向工具包目录（运行 install.ps1 会自动写入）。'
+        );
+        return;
+    }
+    const env = resolveSyslab(false);
+    const terminal = vscode.window.createTerminal({
+        name: 'Syslab 补全索引',
+        cwd: env ? env.info.syslabHome : undefined,
+        env: env ? terminalEnv(env) : undefined,
+        iconPath: new vscode.ThemeIcon('symbol-method')
+    });
+    terminal.show(true);
+    terminal.sendText(`powershell -NoProfile -ExecutionPolicy Bypass -File "${script}"`);
+    vscode.window.showInformationMessage('正在生成补全索引（首次需加载包，约十几秒到一分钟）。完成后自动生效。');
+}
+
+function reloadCompletionIndex() {
+    const data = getCompletionIndex();
+    if (data) {
+        vscode.window.showInformationMessage(
+            `补全索引已载入：${data.items.length} 个符号 / ${(data.packages || []).length} 个包（生成于 ${data.generatedAt}）。`
+        );
+    } else {
+        vscode.window.showWarningMessage(`没有找到补全索引：${completionIndexPath()}。可执行 “Syslab: 生成代码补全索引”。`);
+    }
+}
+
+/** 补全提供器：普通标识符 + `包名.` 成员访问 + `using/import` 后的包名 */
+function provideCompletionItems(document, position) {
+    const configuration = vscode.workspace.getConfiguration('syslab');
+    if (!configuration.get('completion.enable')) { return undefined; }
+
+    const line = document.lineAt(position.line).text;
+    const context = completionLib.detectContext(line, position.character);
+    const limit = configuration.get('completion.maxItems') || 200;
+    const withDocs = configuration.get('completion.documentation') !== false;
+
+    // 1) using / import 之后补全包名（来自当前环境的 Project.toml + 索引）
+    if (context.inUsing) {
+        const names = [];
+        const env = resolveSyslab(false);
+        if (env) {
+            const files = packagesLib.defaultEnvironmentFiles(env.depot, env.info.juliaVersion || '');
+            const projectPath = files.projectPath || path.join(env.defaultProject, 'Project.toml');
+            for (const pkg of packagesLib.listEnvironmentPackages(projectPath, files.manifestPath)) {
+                names.push(pkg.name);
+            }
+        }
+        const index = getCompletionIndex();
+        if (index && Array.isArray(index.packages)) { names.push(...index.packages); }
+        return completionLib.searchPackages(names, context.prefix, limit).map(name => {
+            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
+            item.detail = 'Julia 包（Syslab 环境）';
+            return item;
+        });
+    }
+
+    // 2) 符号补全
+    const index = getCompletionIndex();
+    if (!index) { hintCompletionIndex(); return undefined; }
+
+    return completionLib.searchSymbols(index, {
+        prefix: context.prefix,
+        memberOf: context.memberOf,
+        limit: limit
+    }).map(hit => {
+        const item = new vscode.CompletionItem(hit.n, COMPLETION_KIND_MAP[hit.k] || vscode.CompletionItemKind.Variable);
+        item.detail = hit.p ? `${hit.p} · ${hit.k}` : hit.k;
+        item.sortText = `${completionLib.KIND_PRIORITY[hit.k] === undefined ? 9 : completionLib.KIND_PRIORITY[hit.k]}${hit.n}`;
+        if (withDocs && hit.d) {
+            const doc = new vscode.MarkdownString();
+            doc.appendMarkdown(`**${hit.p}.${hit.n}**\n\n${hit.d}`);
+            item.documentation = doc;
+        }
+        return item;
+    });
 }
 
 /**
@@ -796,6 +934,18 @@ function writeBridgeStatus(context, extra) {
         syslabHome: (env && env.info) ? env.info.syslabHome : null,
         juliaExe: env ? env.juliaExe : null,
         juliaAvailable: !!(env && env.available),
+        completion: (function () {
+            // 记录补全索引状态，便于确认“补全是否真的装上了”
+            const file = completionIndexPath();
+            const index = getCompletionIndex();
+            return {
+                enabled: vscode.workspace.getConfiguration('syslab').get('completion.enable') !== false,
+                file: file,
+                fileExists: fs.existsSync(file),
+                items: index ? index.items.length : 0,
+                packages: index ? (index.packages || []) : []
+            };
+        })(),
         syslabExtensions: {}
     };
     for (const id of SYSLAB_EXTENSION_IDS) {
@@ -863,7 +1013,27 @@ async function activate(context) {
             openFolder(env && env.info ? env.info.syslabHome : '');
         }),
         vscode.extensions.onDidChange(() => writeBridgeStatus(context, { shellStubs: stubCount })),
-        vscode.window.onDidChangeActiveTextEditor(() => writeBridgeStatus(context, { shellStubs: stubCount }))
+        vscode.window.onDidChangeActiveTextEditor(() => writeBridgeStatus(context, { shellStubs: stubCount })),
+        vscode.commands.registerCommand('syslab.buildCompletionIndex', buildCompletionIndex),
+        vscode.commands.registerCommand('syslab.reloadCompletionIndex', reloadCompletionIndex)
+    );
+
+    // Julia 代码补全（离线索引：TyBase/TyMath/TyPlot 等包的导出符号 + 一行文档）
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider(
+            ['julia', 'juliamarkdown'],
+            {
+                provideCompletionItems(document, position) {
+                    try {
+                        return provideCompletionItems(document, position);
+                    } catch (err) {
+                        console.error('[vscodewithsyslab] 补全失败：' + err.message);
+                        return undefined;
+                    }
+                }
+            },
+            '.'
+        )
     );
 
     // “Syslab Julia” 终端配置文件：任何终端里都能直接进入 Syslab 环境

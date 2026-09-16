@@ -2,7 +2,7 @@
   "name": "vscodewithsyslab",
   "displayName": "VScodeWithSyslab (MWORKS Syslab Bridge)",
   "description": "在原生 VS Code 中使用 MWORKS.Syslab 的 Julia / M 语言环境：运行脚本、启动 Syslab REPL、打开 Syslab、环境自检。",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "publisher": "StKGC",
   "license": "MIT",
   "repository": {
@@ -42,6 +42,8 @@
     "onCommand:syslab.showEnvironment",
     "onCommand:syslab.checkHealth",
     "onCommand:syslab.pickPreloadPackages",
+    "onCommand:syslab.buildCompletionIndex",
+    "onCommand:syslab.reloadCompletionIndex",
     "onCommand:syslab.openDepot",
     "onCommand:syslab.openInstallDir"
   ],
@@ -100,6 +102,18 @@
         "title": "Syslab: 选择预加载包…（多选）",
         "category": "Syslab",
         "icon": "$(checklist)"
+      },
+      {
+        "command": "syslab.buildCompletionIndex",
+        "title": "Syslab: 生成代码补全索引",
+        "category": "Syslab",
+        "icon": "$(symbol-method)"
+      },
+      {
+        "command": "syslab.reloadCompletionIndex",
+        "title": "Syslab: 重新载入代码补全索引",
+        "category": "Syslab",
+        "icon": "$(refresh)"
       },
       {
         "command": "syslab.openInstallDir",
@@ -248,6 +262,33 @@
           "default": "",
           "markdownDescription": "MWORKS Syslab 主程序 `Syslab.exe` 路径（用于“用 Syslab 打开”）。留空自动探测。",
           "scope": "machine"
+        },
+        "syslab.kitPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "本工具包（VScodeWithSyslab）目录，`install.ps1` 会自动写入。用于“Syslab: 生成代码补全索引”等命令定位脚本。",
+          "scope": "machine"
+        },
+        "syslab.completion.enable": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "启用内置 Julia 代码补全（离线索引，不依赖语言服务器）。"
+        },
+        "syslab.completion.file": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "补全索引文件路径，留空表示 `%USERPROFILE%\\.syslab-vscode\\completion.json`（由 `scripts\\Build-CompletionIndex.ps1` 生成）。",
+          "scope": "machine"
+        },
+        "syslab.completion.maxItems": {
+          "type": "number",
+          "default": 200,
+          "markdownDescription": "每次补全最多返回多少项（越大越全，但列表更长）。"
+        },
+        "syslab.completion.documentation": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "补全时显示索引里的一行文档（TyPlot/TyMath 等带中文说明）。"
         }
       }
     }

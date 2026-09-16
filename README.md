@@ -94,7 +94,7 @@ bin\Syslab-Code.cmd "D:\你的工程目录"
 ## 三、目录结构
 
 ```
-MWORKS\
+VScodeWithSyslab\
 ├─ install.ps1                  一键安装（环境文件 + VSIX 扩展 + 兼容补丁 + VS Code 设置）
 ├─ install.sh                   Linux / macOS 版一键安装（环境 + 扩展 + 设置）
 ├─ uninstall.ps1                卸载（-RestoreSettings 可还原备份的设置）
@@ -106,6 +106,7 @@ MWORKS\
 │   ├─ Syslab-Shell.cmd         打开带 Syslab 环境的 Julia REPL
 │   └─ Start-SyslabShell.ps1    同上（PowerShell 实现）
 ├─ extension\                   桥接扩展源码（StKGC.vscodewithsyslab，publisher 可在 package.json 里改）
+│   └─ lib\                     纯逻辑模块：packages.js（读环境包列表）、completion.js（补全检索）
 ├─ scripts\
 │   ├─ Build-SyslabVsix.ps1     把 Syslab 扩展打包为 VSIX（-Install 可直接安装）
 │   ├─ New-SyslabVsix.ps1       单个扩展目录 → VSIX（自动应用兼容补丁）
@@ -116,6 +117,8 @@ MWORKS\
 │   ├─ Update-PreloadEnum.ps1    按当前环境刷新「预加载包」设置页的下拉候选（enum）
 │   ├─ update-preload-enum.js    上者的 Node 实现（安全改写已安装扩展的 package.json）
 │   ├─ Set-LintMode.ps1          调整 Julia 静态检查严格度（quiet/balanced/strict）
+│   ├─ Build-CompletionIndex.ps1 生成离线代码补全索引（+ build-completion-index.jl）
+│   ├─ Test-CompletionIndex.ps1  自检补全索引（+ test-completion-index.js，断言检索逻辑）
 │   ├─ Test-SyslabEnv.ps1       环境自检
 │   ├─ Run-SyslabScript.ps1     命令行运行 .jl 脚本（批处理/CI 可用）
 │   └─ check-syntax.js          开发辅助：校验扩展 JS/JSON 语法
@@ -124,9 +127,10 @@ MWORKS\
 │   ├─ plot_demo.jl             TyPlot 绘图 + exportgraphics 导出图片
 │   └─ demo.m                    M 语言示例
 ├─ vsix\                        本机构建缓存（已 gitignore）
-├─ release\                     发布包（VSIX + manifest.json + SHA256SUMS，随仓库一起推送）
+├─ release\                     发布包（VSIX + manifest.json + SHA256SUMS）；**本地构建产物，已 gitignore**，
+│                               对外分发走 GitHub Releases 附件（`Pack-ExtensionRelease.ps1 -PublishGitHub`）
 ├─ cloud\PUBLISH.md             上云与多平台同步指南（GitHub / 对象存储 / 内网 / 市场）
-└─ .gitignore                   仓库策略：release 入库、vsix/zip 不入库
+└─ .gitignore                   仓库策略：release/ 与 vsix/、*.zip 不入库（走 GitHub Releases）
 ```
 
 生成的运行时文件：
@@ -136,6 +140,7 @@ MWORKS\
 | `%USERPROFILE%\.syslab-vscode\env.json` | 与 Syslab 主程序一致的环境变量（桥接扩展读取） |
 | `%USERPROFILE%\.syslab-vscode\env.cmd` / `env.ps1` | 同样的环境变量，供批处理/PowerShell 使用 |
 | `%USERPROFILE%\.syslab-vscode\bridge-status.json` | 启动自检结果：Syslab 扩展是否安装/激活成功（排查用） |
+| `%USERPROFILE%\.syslab-vscode\completion.json` | 离线代码补全索引（`Build-CompletionIndex.ps1` 生成，见第十节） |
 
 ---
 
@@ -150,6 +155,8 @@ MWORKS\
 | `Syslab: 用 MWORKS Syslab 打开当前文件` | 交给 Syslab 主程序打开 |
 | `Syslab: 环境自检` | 在新终端里打印 Julia 版本/环境并加载预置包 |
 | `Syslab: 选择预加载包…（多选）` | **图形化勾选** REPL/终端启动时预加载的包（选项来自当前环境的真实包列表），自动同步三处设置 |
+| `Syslab: 生成代码补全索引` | 用 Syslab 的 Julia 导出常用包的符号+文档，生成离线补全索引 |
+| `Syslab: 重新载入代码补全索引` | 输出当前索引的条目数/包列表（索引按 mtime 自动感知更新） |
 | `Syslab: 显示环境信息` | 输出通道里列出全部环境变量与关键文件检查 |
 | `Syslab: 打开 Depot / 安装目录` | 资源管理器中定位 |
 
@@ -284,15 +291,15 @@ code --install-extension vsix\StKGC.vscodewithsyslab-1.0.0.vsix --force
 ```powershell
 # ① 打包 + 上传为 GitHub Release 附件（私有仓库自动使用 git 已保存的凭据）
 powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 `
-    -PackVersion 1.0.0 -PublishGitHub StKGC/VScodeWithSyslab -Tag v1.0.0
+    -PackVersion 1.2.0 -PublishGitHub StKGC/VScodeWithSyslab -Tag v1.2.0
 
 # ② 其它机器安装（Windows）：下载 + SHA256 校验 + 安装 + 写环境，一步到位
 powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
-    -GitHubRelease StKGC/VScodeWithSyslab@v1.0.0
+    -GitHubRelease StKGC/VScodeWithSyslab@v1.2.0
 #   私有仓库会自动取 git 凭据（也可显式 -Token / $env:GITHUB_TOKEN）；只装桥接扩展加 -OnlyBridge
 
 # ② 其它机器安装（Linux / macOS）
-./install.sh --github-release StKGC/VScodeWithSyslab@v1.0.0
+./install.sh --github-release StKGC/VScodeWithSyslab@v1.2.0
 ```
 
 其它分发方式（对象存储 / 内网 nginx / 网盘 / 仓库内 raw）与私有仓库注意事项见 `cloud\PUBLISH.md`；
@@ -451,7 +458,150 @@ Syslab 的 REPL/调试器可能带 `--startup-file=no`，那种情况下以“�
 
 ---
 
-## 十、实测记录
+## 十、代码自动补全（离线索引）
+
+### 为什么不能直接用现成的语言服务器
+
+原生 Julia 补全靠 `LanguageServer.jl`（也就是 `julia-vscode` 那一套）。Syslab 的 depot 里**只有**编辑器
+（`StKGC.syslab-julia`）和诊断器（`StKGC.julia-analyzer`），没有语言服务器：
+
+```
+C:\Users\Public\TongYuan\.julia\packages\
+    → 有 TyBase / TyMath / TyPlot / StaticLint …  没有 LanguageServer / JuliaWorkspaces
+```
+
+所以装完能看到语法高亮、能跑脚本，但**敲 `.` 不会弹补全**。自己装一个 `LanguageServer` 也可以，
+但要联网拉包、要预编译，还容易和 Syslab 定制的 Julia / 环境版本打架。
+
+本工具包的做法是 **离线快照 + 扩展内置补全器**：用 Syslab 自带的 Julia 把常用包的导出符号和一行文档
+导出成 JSON，桥接扩展读这个 JSON 提供补全。零联网、零额外依赖、激活即可用。
+
+### 生成索引
+
+```powershell
+# 按当前 syslab.preloadPackages（默认 TyBase/TyMath/TyPlot）生成
+powershell -File scripts\Build-CompletionIndex.ps1
+
+# 指定包（逗号分隔，覆盖默认列表）
+powershell -File scripts\Build-CompletionIndex.ps1 -Packages TyBase,TyMath,TyPlot,TyStatistics
+
+# 在默认列表外追加包；-NoDocs 不收集文档（更快、文件更小）
+powershell -File scripts\Build-CompletionIndex.ps1 -ExtraPackages DataFrames,CSV -NoDocs
+
+# 换输出位置
+powershell -File scripts\Build-CompletionIndex.ps1 -Output D:\tmp\completion.json
+```
+
+脚本做三件事：
+
+1. `Set-SyslabEnvironment` 注入 Syslab 的环境变量（**必须**；否则会去找系统默认 `~/.julia`，
+   报 `Package TyMath … not installed`）；
+2. 用 Syslab 的 Julia 跑 `scripts\build-completion-index.jl`：`using` 每个包 → 取
+   `names(mod; all=false, imported=false)` 拿到导出符号 → 按值分类（function / type / const / module / value）
+   → 用 `Base.Docs.doc` 取一行文档（压平空白、截断到 240 字符）；
+3. 写 `%USERPROFILE%\.syslab-vscode\completion.json`。
+
+`install.ps1` 会把它作为**第 4.8 步自动执行**一次（`-SkipCompletionIndex` 可跳过）。
+
+实测（TyBase + TyMath + TyPlot，含文档）：
+
+```
+  TyBase: 371 个导出符号
+  TyMath: 890 个导出符号
+  TyPlot: 237 个导出符号
+索引已写入：C:\Users\29136\.syslab-vscode\completion.json（共 1498 项，3 个包）
+[完成] 生成代码补全索引：1498 项，399.5 KB，耗时 14.1 秒
+       function=1307  type=112  const=37  module=34  value=8
+```
+
+索引格式（结构示意）：
+
+```json
+{
+  "generatedAt": "2026-09-17T00:45:00",
+  "julia": "1.10.10+12",
+  "project": "C:\\Users\\Public\\TongYuan\\.julia\\environments\\v1.10\\Project.toml",
+  "packages": ["TyBase", "TyMath", "TyPlot"],
+  "items": [
+    { "n": "figure", "k": "function", "p": "TyPlot", "d": "figure - 创建图窗窗口 此 Syslab 函数 使用默认属性值创建一个新的图窗窗口。…" }
+  ]
+}
+```
+
+### 补全行为（实测）
+
+| 你输入 | 触发方式 | 弹出的候选（实测） |
+| --- | --- | --- |
+| `pl` | 打字即补全 | `plan_fft` / `planerot` / `plot` / `plot3` / `plotmatrix` / `plotyy` …（37 项，全部包的符号并集） |
+| `TyPlot.fi` | 输入 `.` | `figure` / `figuregroup` / `fimplicit` / `findobj`（4 项，只列 TyPlot 导出的成员） |
+| `TyMath.fi` | 输入 `.` | `fibonacci` / `filter1` / `filter2` / `findedge` / `findnode` / `findnz` |
+| `using TyA` | 打字即补全 | `TyAppDesigner`（`using`/`import` 之后按包名补全） |
+| 停在候选上 | — | 显示索引里的一行文档（TyPlot/TyMath 是中文说明） |
+
+* 触发字符 `.`，生效语言 `julia` 与 `juliamarkdown`；
+* 前缀匹配先精确、后忽略大小写；同名符号只保留一个（按包顺序优先）；
+* 候选按 种类 排序（function → type → module → const → value）。
+
+### 设置
+
+| 设置 | 默认 | 说明 |
+| --- | --- | --- |
+| `syslab.completion.enable` | `true` | 总开关 |
+| `syslab.completion.file` | `""` | 索引路径；留空 = `%USERPROFILE%\.syslab-vscode\completion.json` |
+| `syslab.completion.maxItems` | `200` | 单次最多返回多少项 |
+| `syslab.completion.documentation` | `true` | 是否显示索引里的一行文档 |
+
+### 命令与维护
+
+* `Syslab: 生成代码补全索引` —— 调 `scripts\Build-CompletionIndex.ps1`（按 `syslab.kitPath` 定位脚本）；
+* `Syslab: 重新载入代码补全索引` —— 输出当前条目数/包列表，并让补全器立刻重读；
+  索引按文件 mtime 自动感知，手动改了文件不重载也会生效。
+
+自检（读真实索引，断言上下文解析/前缀/成员/包名四类检索）：
+
+```powershell
+powershell -File scripts\Test-CompletionIndex.ps1
+```
+
+```
+索引文件 : C:\Users\29136\.syslab-vscode\completion.json
+索引内容 : 1498 项 / 3 个包 TyBase,TyMath,TyPlot
+生成信息 : julia 1.10.10+12 | 2026-09-17T00:45:00
+  [通过] 索引条目数 > 100  实际 1498
+  [通过] 索引里记录了包列表  TyBase,TyMath,TyPlot
+  [通过] 解析「空行无前缀」  prefix="" memberOf=null inUsing=false
+  [通过] 解析「标识符前缀 pl」  prefix="pl" memberOf=null inUsing=false
+  [通过] 解析「成员访问 TyPlot.fi」  prefix="fi" memberOf=TyPlot inUsing=false
+  [通过] 解析「赋值右侧 TyPlot.su」  prefix="su" memberOf=TyPlot inUsing=false
+  [通过] 解析「using 之后的包名」  prefix="TyA" memberOf=null inUsing=true
+  [通过] 前缀 pl 有候选  37 项
+  [通过] 前缀 pl 的候选都以 pl 开头  plan_bfft, plan_bfft!, plan_brfft, plan_dct, plan_dct!, plan_fft
+  [通过] 成员补全 TyPlot.fi 有候选  4 项: figure, figuregroup, fimplicit, findobj
+  [通过] 成员补全 TyPlot.fi 只含 TyPlot  TyPlot
+  [通过] 成员补全 TyPlot.fi 都以前缀开头  figure, figuregroup, fimplicit, findobj
+  [通过] TyPlot.fi 命中 figure  figure, figuregroup, fimplicit, findobj
+  [通过] 成员补全 TyMath.fi 有候选  7 项: fibonacci, fibonacci_error, filter1, filter2, findedge, findnode, findnz
+  [通过] 成员补全 TyMath.fi 只含 TyMath  TyMath
+  [通过] 成员补全 TyMath.fi 都以前缀开头  fibonacci, fibonacci_error, filter1, filter2, findedge, findnode, findnz
+  [通过] using TyA 命中 TyAppDesigner  TyAppDesigner
+  [通过] using TyA 结果都是 TyA 开头  TyAppDesigner
+文档抽样 : [TyBase] @__dot__ —— @. expr Convert every function call or operator in expr into a "dot ca
+全部检查通过：离线补全索引可用 ✓
+```
+
+**新增包之后**：`Pkg.add` 装进 Syslab 默认环境 → 重新生成索引（命令面板第一条，或直接跑脚本）→ 补全立即包含新包。
+`install.ps1` 只按**当时**的 `syslab.preloadPackages` 生成索引，所以「改预加载包 → 重建索引」是配套动作。
+
+### 局限（提前说清）
+
+* 这是**静态快照**：只含生成时被 `using` 的那些包 **导出** 的符号。函数里的局部变量、宏展开生成的符号、
+  运行时动态定义的名字都不在索引里。
+* 只补名字 + 一行文档，**没有方法签名/参数提示**，也不做类型推断——那些要真正的语言服务器。
+* 索引是明文 JSON（包名、符号名、文档首行，不含源码）。删掉它扩展会自动退化为「无补全」，不会报错。
+
+---
+
+## 十一、实测记录
 
 ```
 > powershell -File scripts\Run-SyslabScript.ps1 samples\quick_start.jl
@@ -490,6 +640,16 @@ VS Code 端（`%USERPROFILE%\.syslab-vscode\bridge-status.json`，打开 `.jl` /
     "StKGC.tymlang-ide":    { "installed": true, "active": true },
     "StKGC.app-designer":   { "installed": true, "active": true }
   },
-  "shellStubs": 78
+  "shellStubs": 78,
+  "completion": {
+    "enabled": true,
+    "file": "C:\\Users\\29136\\.syslab-vscode\\completion.json",
+    "fileExists": true,
+    "items": 1498,
+    "packages": "TyBase,TyMath,TyPlot"
+  }
 }
 ```
+
+`completion` 段是补全功能的现场状态：`enabled` 来自设置，`fileExists` / `items` / `packages` 是实际读到的索引。
+排查「补全不弹」时先看这里——`items: 0` 或 `fileExists: false` 说明索引没生成（跑 `scripts\Build-CompletionIndex.ps1`）。

@@ -39,6 +39,9 @@
 .PARAMETER SkipSettings
     不修改 VS Code 的 settings.json。
 
+.PARAMETER SkipCompletionIndex
+    跳过生成 Julia 代码补全索引（该步骤会用 Syslab 的 Julia 加载预加载包，约 10~60 秒）。
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File install.ps1
 
@@ -60,7 +63,8 @@ param(
     [string[]]$PreloadPackages = @('TyBase', 'TyMath', 'TyPlot'),   # REPL/终端启动时预加载的 Julia 包
     [switch]$IncludeCopilot,
     [switch]$SkipExtensions,
-    [switch]$SkipSettings
+    [switch]$SkipSettings,
+    [switch]$SkipCompletionIndex
 )
 
 $ErrorActionPreference = 'Stop'
@@ -324,6 +328,32 @@ if (Test-Path $enumScript) {
 }
 
 # ---------------------------------------------------------------------------
+# 4.8 生成 Julia 代码补全索引（离线补全的数据源）
+# ---------------------------------------------------------------------------
+if ($SkipCompletionIndex) {
+    Write-Info '已跳过代码补全索引生成（-SkipCompletionIndex）'
+}
+else {
+    $indexScript = Join-Path $KitRoot 'scripts\Build-CompletionIndex.ps1'
+    if (Test-Path $indexScript) {
+        Write-Info '生成 Julia 代码补全索引（首次需加载预加载包，约十几秒）...'
+        try {
+            $preloadForIndex = @($PreloadPackages | ForEach-Object { ([string]$_ -split ',') } |
+                    ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            if ($preloadForIndex.Count -eq 0) { $preloadForIndex = @('TyBase', 'TyMath', 'TyPlot') }
+            & powershell -NoProfile -ExecutionPolicy Bypass -File $indexScript -Packages ($preloadForIndex -join ',') |
+                ForEach-Object { Write-Host "  $_" }
+        }
+        catch {
+            Write-Warn2 "生成补全索引失败（不影响安装，可在 VS Code 里执行 “Syslab: 生成代码补全索引”）：$($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Warn2 "未找到 $indexScript，跳过补全索引生成"
+    }
+}
+
+# ---------------------------------------------------------------------------
 # 5. 合并 VS Code 设置
 # ---------------------------------------------------------------------------
 if (-not $SkipSettings) {
@@ -367,6 +397,9 @@ if (-not $SkipSettings) {
     Set-SettingDeep $settings 'syslab.juliaExecutable' $juliaExeFwd
     Set-SettingDeep $settings 'syslab.projectPath' $projectDirFwd
     Set-SettingDeep $settings 'syslab.syslabExecutable' (Join-Path $info.SyslabHome 'Bin\syslab.exe')
+    Set-SettingDeep $settings 'syslab.kitPath' $KitRoot                        # 供“生成代码补全索引”等命令定位脚本
+    Set-SettingDeep $settings 'syslab.completion.enable' $true                 # 内置离线补全
+    Set-SettingDeep $settings 'julia.runtimeCompletions' $true                 # 语言服务之外，再向 REPL 请求运行时补全
     Set-SettingDeep $settings 'terminal.integrated.env.windows' $terminalEnv
 
     # 终端配置文件：在 VS Code 里直接选择 “Syslab Julia”

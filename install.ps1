@@ -163,6 +163,7 @@ Write-Ok "env.ps1     : $(Join-Path $envDir 'env.ps1')"
 # 4. 安装扩展（VSIX 离线安装：VS Code 1.7x 起不再识别手工拷贝的扩展目录）
 # ---------------------------------------------------------------------------
 $installedExtensions = @()
+$bridge = Get-BridgeExtensionInfo -KitRoot $KitRoot   # 后面 4.2/4.7 都要用，先算出来
 if (-not $SkipExtensions) {
     Write-Step '4/5 安装扩展到 VS Code'
     if (-not (Test-Path $ExtensionsDir)) { New-Item -ItemType Directory -Path $ExtensionsDir -Force | Out-Null }
@@ -177,7 +178,6 @@ if (-not $SkipExtensions) {
     if ($codeCmd) {
         Write-Info "使用 VSIX + code CLI 安装（code.cmd: $codeCmd）"
 
-        $bridge = Get-BridgeExtensionInfo -KitRoot $KitRoot
         $syslabIds = @('syslab-julia', 'julia-analyzer', 'tymlang-ide', 'app-designer', 'mworks-syslab-copilot')
         $managedIds = @($syslabIds | ForEach-Object { "$($bridge.Publisher).$_".ToLower() })
         # 历次改名的旧 ID / 旧发布者，保留以便清理
@@ -283,17 +283,7 @@ if (-not $SkipExtensions) {
             else { Write-Warn2 "VS Code 未识别 $id（可稍后在扩展面板中确认）" }
         }
 
-        # 4.6 按当前环境刷新「预加载包」下拉候选（enum），让设置页里只出现本机真能 using 的包
-        $enumScript = Join-Path $KitRoot 'scripts\Update-PreloadEnum.ps1'
-        if (Test-Path $enumScript) {
-            try {
-                & powershell -NoProfile -ExecutionPolicy Bypass -File $enumScript -ExtensionsDir $ExtensionsDir |
-                    ForEach-Object { Write-Host "  $_" }
-            }
-            catch {
-                Write-Warn2 "刷新预加载候选失败（不影响安装）：$($_.Exception.Message)"
-            }
-        }
+        # 4.6 安装完成后由下方 4.7 统一刷新「预加载包」下拉候选
     }
     else {
         Write-Warn2 '未找到 code.cmd，退回到复制扩展目录的方式（仅旧版 VS Code 有效）'
@@ -313,6 +303,24 @@ if (-not $SkipExtensions) {
 }
 else {
     Write-Step '4/5 跳过扩展安装（-SkipExtensions）'
+}
+
+# ---------------------------------------------------------------------------
+# 4.7 无论是否安装扩展，都刷新「预加载包」下拉候选（enum）
+#     （Install-ExtensionPack.ps1 走的是 -SkipExtensions，这条保证它也会刷新）
+# ---------------------------------------------------------------------------
+$enumScript = Join-Path $KitRoot 'scripts\Update-PreloadEnum.ps1'
+if (Test-Path $enumScript) {
+    $bridgeExtDir = Join-Path $ExtensionsDir $bridge.FolderName
+    if (Test-Path (Join-Path $bridgeExtDir 'package.json')) {
+        try {
+            & powershell -NoProfile -ExecutionPolicy Bypass -File $enumScript -ExtensionsDir $ExtensionsDir |
+                ForEach-Object { Write-Host "  $_" }
+        }
+        catch {
+            Write-Warn2 "刷新预加载候选失败（不影响安装）：$($_.Exception.Message)"
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------

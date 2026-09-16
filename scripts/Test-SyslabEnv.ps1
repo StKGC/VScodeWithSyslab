@@ -152,7 +152,12 @@ Check 'VS Code 扩展安装情况' {
     if (-not $vscode) { throw '未找到 VS Code 安装' }
     Write-Host "  Code.exe    : $($vscode.Exe) ($($vscode.Version))"
     $extensionsDir = Join-Path $env:USERPROFILE '.vscode\extensions'
-    $expected = @('tongyuan.syslab-julia', 'tongyuan.tymlang-ide', 'tongyuan.julia-analyzer', $bridgeInfo.IdLower)
+    $expected = @(
+        "$($bridgeInfo.Publisher).syslab-julia".ToLower(),
+        "$($bridgeInfo.Publisher).tymlang-ide".ToLower(),
+        "$($bridgeInfo.Publisher).julia-analyzer".ToLower(),
+        $bridgeInfo.IdLower
+    )
     $missing = @()
     foreach ($id in $expected) {
         $dir = Get-ChildItem $extensionsDir -Directory -ErrorAction SilentlyContinue |

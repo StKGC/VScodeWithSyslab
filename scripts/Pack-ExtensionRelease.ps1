@@ -12,7 +12,7 @@
         ├─ TongYuan.julia-analyzer-26.4.0.vsix
         ├─ TongYuan.tymlang-ide-26.1.0.vsix
         ├─ TongYuan.app-designer-26.1.0.vsix
-        └─ syslab-community.syslab-bridge-1.0.0.vsix
+        └─ StKGC.vscodewithsyslab-1.0.0.vsix   # 本工具包自带桥接扩展（MIT）
 
     把整个 release 目录丢到 GitHub Release / 对象存储 / 内网 HTTP / 网盘即可，
     其它机器用 scripts\Install-ExtensionPack.ps1（Windows）或 install.sh（Linux/macOS）拉取安装。
@@ -31,13 +31,22 @@
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -Zip
+
+.EXAMPLE
+    # 打包并直接上传为 GitHub Release 附件（私有仓库会自动用 git 已保存的凭据）
+    powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -PackVersion 1.0.0 `
+        -PublishGitHub BlackTea-Lee/VScodeWithSyslab -Tag v1.0.0
 #>
 [CmdletBinding()]
 param(
     [string]$ReleaseDir,
     [string]$PackVersion,
     [switch]$IncludeCopilot,
-    [switch]$Zip
+    [switch]$Zip,
+    [string]$PublishGitHub,        # owner/repo：把发布包作为 Release 附件上传
+    [string]$Tag,                  # 默认 v<PackVersion>
+    [string]$Token,                # 默认取 $env:GITHUB_TOKEN / $env:GH_TOKEN / git 凭据
+    [switch]$IncludeZipInRelease   # 同时把打包好的 zip 也作为附件上传
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,7 +112,15 @@ foreach ($vsix in $vsixFiles) {
         file    = $name
         sha256  = $hash
         size    = $size
-        note    = if ($bridgeInfo -and $id -eq $bridgeInfo.IdLower) { "本工具包自带桥接扩展（$($bridgeInfo.Publisher) / MIT）" } else { '来自本机 MWORKS.Syslab 安装，请遵守同元软控许可，仅限自有环境分发' }
+        note    = if ($bridgeInfo -and $id -eq $bridgeInfo.IdLower) {
+            "本工具包自带桥接扩展（$($bridgeInfo.Publisher) / MIT）"
+        }
+        elseif ($bridgeInfo -and $id -like "$($bridgeInfo.Publisher).*") {
+            "来自本机 MWORKS.Syslab 安装，发布者前缀已统一改写为 $($bridgeInfo.Publisher)；著作权仍属同元软控，仅限自有环境私有分发"
+        }
+        else {
+            '来自本机 MWORKS.Syslab 安装，请遵守同元软控许可，仅限自有环境分发'
+        }
     }
     Write-Host ("  [OK] {0}  {1:N1} MB  {2}" -f $name, ($size / 1MB), $hash.Substring(0, 16))
 }
@@ -150,19 +167,60 @@ if ($Zip) {
 }
 
 # ---------------------------------------------------------------------------
-# 5. 上传提示
+# 5. 可选：上传为 GitHub Release 附件（推荐，避免 git 历史随发版变大）
+# ---------------------------------------------------------------------------
+if ($PublishGitHub) {
+    if (-not $Tag) { $Tag = "v$PackVersion" }
+
+    $assets = @(Get-ChildItem $ReleaseDir -File | Select-Object -ExpandProperty FullName)
+    if ($Zip -and $IncludeZipInRelease -and $zipPath) { $assets += $zipPath }
+
+    $bodyLines = @(
+        "MWORKS.Syslab × VS Code 扩展发布包（$PackVersion）",
+        '',
+        "来源：$($info.Title) $($info.SyslabVersion) / Julia $($info.JuliaVersion)",
+        "平台：通用（Windows / Linux / macOS，需目标机自行安装 MWORKS.Syslab 并跑 install.ps1 / install.sh 写入环境）",
+        '',
+        '附件：',
+        ($extensions | ForEach-Object { "- ``$($_.file)``（$($_.id) v$($_.version)）" }) -join "`n",
+        '- `manifest.json`（含 SHA256 校验清单）',
+        '- `SHA256SUMS.txt`',
+        '',
+        '安装（Windows）：',
+        '```powershell',
+        "powershell -File scripts\Install-ExtensionPack.ps1 -GitHubRelease $PublishGitHub@$Tag",
+        '```',
+        '安装（Linux / macOS）：',
+        '```bash',
+        "./install.sh --github-release $PublishGitHub@$Tag",
+        '```'
+    )
+
+    Write-Host ''
+    Write-Host '=== 上传到 GitHub Release ===' -ForegroundColor Cyan
+    $result = Publish-GitHubRelease -Repository $PublishGitHub -Tag $Tag -AssetPaths $assets `
+        -Name "Syslab x VS Code pack $PackVersion" -Body ($bodyLines -join "`n") -Token $Token
+    Write-Host ''
+    Write-Host "  Release：$($result.HtmlUrl)" -ForegroundColor Green
+    Write-Host "  附件  ：$($result.Assets -join ', ')"
+}
+
+# ---------------------------------------------------------------------------
+# 6. 上传提示
 # ---------------------------------------------------------------------------
 Write-Host ''
 Write-Host '=== 发布包已生成 ===' -ForegroundColor Green
 Write-Host "  目录：$ReleaseDir"
 Write-Host "  文件：$($extensions.Count) 个 VSIX + manifest.json + SHA256SUMS.txt"
 Write-Host ''
-Write-Host '  上传到云端（任选其一，详见 cloud\PUBLISH.md）：' -ForegroundColor White
-Write-Host '    1) GitHub Release ：把 release 目录整体作为 Release 附件上传'
+Write-Host '  分发方式（详见 cloud\PUBLISH.md）：' -ForegroundColor White
+Write-Host '    1) GitHub Release（推荐）：本脚本加 -PublishGitHub <owner/repo> [-Tag vX] 自动上传附件'
 Write-Host '    2) 对象存储/静态站点：上传 release 目录，得到形如 https://xxx/ 的基地址'
 Write-Host '    3) 内网 HTTP / 网盘共享：拷贝 release 目录，其它机器用 Install-ExtensionPack.ps1 / install.sh 拉取'
 Write-Host ''
 Write-Host '  其它机器安装：' -ForegroundColor White
-Write-Host '    Windows : powershell -File scripts\Install-ExtensionPack.ps1 -Source <基地址或本地目录>'
-Write-Host '    Linux   : ./install.sh --base-url <基地址>   （macOS 同）'
+Write-Host '    Windows : powershell -File scripts\Install-ExtensionPack.ps1 -GitHubRelease <owner/repo>@<tag>'
+Write-Host '              或 -Source <基地址或本地目录>'
+Write-Host '    Linux   : ./install.sh --github-release <owner/repo>@<tag>   （macOS 同）'
+Write-Host '              或 --base-url <基地址>'
 Write-Host ''

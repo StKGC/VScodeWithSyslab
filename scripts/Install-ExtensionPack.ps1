@@ -20,7 +20,7 @@
     私有仓库（如 GitHub 私有 Release）访问令牌，会以 Bearer 形式加到请求头。
 
 .PARAMETER OnlyBridge
-    只安装本工具包的桥接扩展（syslab-community.syslab-bridge），不安装同元软控的扩展。
+    只安装本工具包的桥接扩展（StKGC.vscodewithsyslab），不安装同元软控的扩展。
 
 .PARAMETER SkipEnv
     只装扩展，不写入环境变量/设置（之后可手动运行 install.ps1）。
@@ -32,10 +32,14 @@
     powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 -Source https://example.com/syslab-pack/
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 -Source D:\share\syslab-pack -OnlyBridge
+.EXAMPLE
+    # 直接从 GitHub Release 安装（推荐；私有仓库会自动用 git 已保存的凭据，公开仓库无需令牌）
+    powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 -GitHubRelease BlackTea-Lee/VScodeWithSyslab@v1.0.0
 #>
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Source')]
 param(
-    [Parameter(Mandatory)][string]$Source,
+    [Parameter(Mandatory, ParameterSetName = 'Source')][string]$Source,
+    [Parameter(Mandatory, ParameterSetName = 'GitHub')][string]$GitHubRelease,   # owner/repo@tag
     [string]$Token,
     [string]$VSCodeExe,
     [switch]$OnlyBridge,
@@ -82,7 +86,55 @@ New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 $packDir = $null
 
 try {
-    $isUrl = $Source -match '^(https?)://'
+    $isUrl = $false
+    if ($PSCmdlet.ParameterSetName -eq 'GitHub') {
+        # ---- 从 GitHub Release 附件下载（公开/私有都走 API，私有需令牌） ----
+        if ($GitHubRelease -notmatch '^(?<repo>[^@]+)@(?<tag>.+)$') {
+            throw "-GitHubRelease 需要形如 owner/repo@v1.0.0，当前值为：$GitHubRelease"
+        }
+        $repoSpec = $Matches['repo']
+        $tagSpec = $Matches['tag']
+        $resolvedToken = Get-GitHubToken -Token $Token
+        Write-Info "GitHub Release：$repoSpec@$tagSpec$(if ($resolvedToken) { '（已带令牌）' } else { '（匿名）' })"
+
+        $releaseAssets = Get-GitHubReleaseAssets -Repository $repoSpec -Tag $tagSpec -Token $resolvedToken
+        $packDir = Join-Path $tempDir 'gh-release'
+        New-Item -ItemType Directory -Path $packDir -Force | Out-Null
+
+        # 先取 manifest.json，据此决定要下载哪些扩展
+        $manifestAsset = $releaseAssets | Where-Object { $_.name -eq 'manifest.json' } | Select-Object -First 1
+        if ($manifestAsset) {
+            Save-GitHubReleaseAsset -Asset $manifestAsset -OutFile (Join-Path $packDir 'manifest.json') -Token $resolvedToken | Out-Null
+            Write-Ok '已下载 manifest.json'
+        }
+        $sumAsset = $releaseAssets | Where-Object { $_.name -eq 'SHA256SUMS.txt' } | Select-Object -First 1
+        if ($sumAsset) {
+            Save-GitHubReleaseAsset -Asset $sumAsset -OutFile (Join-Path $packDir 'SHA256SUMS.txt') -Token $resolvedToken | Out-Null
+        }
+
+        $wantedFiles = @()
+        $localManifest = Join-Path $packDir 'manifest.json'
+        if (Test-Path $localManifest) {
+            $releaseManifest = Get-Content $localManifest -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($ext in $releaseManifest.extensions) {
+                if ($OnlyBridge -and ($ext.id -ne $bridgeInfo.IdLower)) { continue }
+                $wantedFiles += $ext.file
+            }
+        }
+        else {
+            $wantedFiles = $releaseAssets | Where-Object { $_.name -like '*.vsix' } | Select-Object -ExpandProperty name
+        }
+
+        foreach ($fileName in $wantedFiles) {
+            $asset = $releaseAssets | Where-Object { $_.name -eq $fileName } | Select-Object -First 1
+            if (-not $asset) { Write-Warn2 "Release 中没有附件 $fileName"; continue }
+            Write-Info ("下载 {0}（{1:N1} MB）" -f $fileName, ($asset.size / 1MB))
+            Save-GitHubReleaseAsset -Asset $asset -OutFile (Join-Path $packDir $fileName) -Token $resolvedToken | Out-Null
+        }
+    }
+    else {
+        $isUrl = $Source -match '^(https?)://'
+    }
     if ($isUrl) {
         if ($Source -match '\.vsix$') {
             # 单个 VSIX
@@ -115,7 +167,7 @@ try {
             $packDir = $tempDir
         }
     }
-    else {
+    elseif ($PSCmdlet.ParameterSetName -eq 'Source') {
         $resolved = (Resolve-Path $Source).Path
         if (Test-Path $resolved -PathType Container) { $packDir = $resolved }
         elseif ($resolved -match '\.zip$') {
@@ -169,7 +221,11 @@ if ($manifest) {
     foreach ($ext in $manifest.extensions) {
         if ($OnlyBridge -and ($ext.id -ne $bridgeInfo.IdLower)) { continue }
         $file = Join-Path $packDir $ext.file
-        if (-not (Test-Path $file)) { Write-Warn2 "缺少文件 $($ext.file)"; continue }
+        if (-not (Test-Path $file)) {
+            # -OnlyBridge 时本来就没下载其它扩展，这里不必报警
+            if ($PSCmdlet.ParameterSetName -ne 'GitHub') { Write-Warn2 "缺少文件 $($ext.file)" }
+            continue
+        }
         if (-not $SkipVerify -and $ext.sha256) {
             $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLower()
             if ($hash -ne $ext.sha256) {

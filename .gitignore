@@ -1,16 +1,22 @@
 # ---------------------------------------------------------------------------
-# MWORKS Syslab × VS Code 集成工具包
+# VScodeWithSyslab 工具包
 #
-# 仓库策略：
-#   * release/  —— 发布包（5 个 VSIX + manifest.json + SHA256SUMS），进仓库，
-#                  这样任何机器可以直接：
-#                    Install-ExtensionPack.ps1 -Source https://github.com/<你>/<仓库>/raw/main/release/manifest.json
-#                    ./install.sh --base-url https://github.com/<你>/<仓库>/raw/main/release
-#   * 若不想把二进制放进 git 历史，把 /release/ 也加进忽略，改用 GitHub Releases 附件分发。
+# 仓库策略：仓库里只放源码与脚本，**不放扩展二进制**，避免 git 历史随每次发版变大。
+#   * vsix/     —— 本机构建缓存
+#   * release/  —— 本机发布包（VSIX + manifest.json + SHA256SUMS），用
+#                    Pack-ExtensionRelease.ps1 -PublishGitHub <owner/repo> [-Tag vX]
+#                  打包并上传为 GitHub Release 附件；其它机器用
+#                    Install-ExtensionPack.ps1 -GitHubRelease <owner/repo>@<tag>
+#                    ./install.sh --github-release <owner/repo>@<tag>
+#                  安装。
+#   * 若确实想让匿名 raw 链接直接下载，可把 /release/ 从忽略列表去掉（代价是仓库会变大）。
 # ---------------------------------------------------------------------------
 
 # 本机构建缓存（每次打包都会重新生成，不必入库）
 /vsix/
+
+# 发布包（走 GitHub Release 附件分发）
+/release/
 
 # 打包出来的 zip（与 release/ 内容重复，如需分发请上传到 GitHub Releases）
 /*.zip

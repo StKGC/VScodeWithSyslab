@@ -3,7 +3,7 @@
 .SYNOPSIS
     卸载 install.ps1 写入到 VS Code 的 Syslab 集成。
 .DESCRIPTION
-    1. 删除 VS Code 用户扩展目录中的 tongyuan.* 与 syslab-community.syslab-bridge；
+    1. 删除 VS Code 用户扩展目录中的 Syslab 扩展（StKGC.* 与旧前缀 tongyuan.*）与桥接扩展；
     2. 删除 %USERPROFILE%\.syslab-vscode 环境文件；
     3. 清理 settings.json 中由 install.ps1 写入的键（或用 -RestoreSettings 直接还原备份）。
 
@@ -31,8 +31,10 @@ Write-Host '=== 卸载 MWORKS Syslab × VS Code 集成 ===' -ForegroundColor Cya
 
 # 1. 扩展
 $bridge = Get-BridgeExtensionInfo -KitRoot $KitRoot
-$targets = @('tongyuan.syslab-julia', 'tongyuan.tymlang-ide', 'tongyuan.julia-analyzer', 'tongyuan.app-designer',
-    'tongyuan.mworks-syslab-copilot', $bridge.IdLower, 'syslab-community.syslab-bridge')
+$syslabNames = @('syslab-julia', 'tymlang-ide', 'julia-analyzer', 'app-designer', 'mworks-syslab-copilot')
+$targets = @($syslabNames | ForEach-Object { "$($bridge.Publisher).$_".ToLower() })
+$targets += @($syslabNames | ForEach-Object { "tongyuan.$_" })   # 旧前缀
+$targets += @($bridge.IdLower, 'stkgc.syslab-bridge', 'syslab-community.syslab-bridge')
 foreach ($id in $targets) {
     Get-ChildItem $ExtensionsDir -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -eq $id -or $_.Name -like "$id-*" } |

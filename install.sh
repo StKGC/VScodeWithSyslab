@@ -23,6 +23,7 @@ KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSLAB_HOME_ARG=""
 TONGYUAN_PATH_ARG=""
 BASE_URL=""
+GITHUB_RELEASE=""
 VSIX_DIR=""
 CODE_CLI=""
 EXTENSIONS_DIR=""
@@ -40,9 +41,10 @@ usage() {
 可选参数：
   --syslab-home <dir>     MWORKS.Syslab 安装目录（默认自动探测）
   --tongyuan-path <dir>   共享数据目录（默认 $HOME/TongYuan；Linux 下 Syslab 即用此默认值）
+  --github-release <spec> 从 GitHub Release 安装，形如 owner/repo@v1.0.0（推荐）
+  --token <token>         私有仓库/GitHub API 访问令牌（Bearer；公开仓库可省略）
   --vsix-dir <dir>        本地 VSIX 目录（默认 <工具包>/release，其次 <工具包>/vsix）
   --base-url <url>        云端发布包基地址（目录中含 manifest.json 与 *.vsix）
-  --token <token>         私有仓库访问令牌（Bearer）
   --code-cli <path>       code 命令行路径（默认自动探测，macOS 会找 /Applications/...）
   --extensions-dir <dir>  扩展目录（默认 ~/.vscode/extensions）
   --only-bridge           只安装桥接扩展
@@ -55,6 +57,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --syslab-home)     SYSLAB_HOME_ARG="${2:-}"; shift 2 ;;
         --tongyuan-path)   TONGYUAN_PATH_ARG="${2:-}"; shift 2 ;;
+        --github-release)  GITHUB_RELEASE="${2:-}"; shift 2 ;;
         --vsix-dir)        VSIX_DIR="${2:-}"; shift 2 ;;
         --base-url)        BASE_URL="${2:-}"; shift 2 ;;
         --token)           TOKEN="${2:-}"; shift 2 ;;
@@ -268,8 +271,8 @@ if [ -f "$BRIDGE_PKG" ]; then
     ok "桥接扩展    : $BRIDGE_ID"
 fi
 
-if [ -z "$RELEASE_DIR" ] && [ -z "$BASE_URL" ]; then
-    warn "既没有本地 VSIX 目录也没有 --base-url，跳过扩展安装"
+if [ -z "$RELEASE_DIR" ] && [ -z "$BASE_URL" ] && [ -z "$GITHUB_RELEASE" ]; then
+    warn "既没有本地 VSIX 目录、也没有 --base-url / --github-release，跳过扩展安装"
     SKIP_EXTENSIONS=1
 fi
 
@@ -283,7 +286,82 @@ trap cleanup EXIT
 if [ "$SKIP_EXTENSIONS" -eq 0 ]; then
     step "4/5 安装扩展"
 
-    if [ -z "$RELEASE_DIR" ] && [ -n "$BASE_URL" ]; then
+    if [ -n "$GITHUB_RELEASE" ]; then
+        # ---- 从 GitHub Release 附件安装（公开仓库可匿名，私有仓库需 --token） ----
+        TMP_DIR="$(mktemp -d)"
+        GH_REPO="${GITHUB_RELEASE%@*}"
+        GH_TAG="${GITHUB_RELEASE##*@}"
+        if [ -z "$GH_REPO" ] || [ -z "$GH_TAG" ] || [ "$GH_REPO" = "$GH_TAG" ]; then
+            warn "--github-release 需要形如 owner/repo@v1.0.0，当前值：$GITHUB_RELEASE"
+            SKIP_EXTENSIONS=1
+        elif ! command -v curl >/dev/null 2>&1; then
+            warn "需要 curl 才能从 GitHub Release 下载"
+            SKIP_EXTENSIONS=1
+        elif ! command -v python3 >/dev/null 2>&1; then
+            warn "需要 python3 解析 GitHub API 返回的附件列表"
+            SKIP_EXTENSIONS=1
+        else
+            info "GitHub Release：$GH_REPO@$GH_TAG"
+            gh_fetch() {  # <out> <url> [accept]
+                if [ -n "$TOKEN" ]; then
+                    if [ -n "${3:-}" ]; then
+                        curl -fsSL -H "Authorization: Bearer $TOKEN" -H "Accept: $3" -o "$1" "$2"
+                    else
+                        curl -fsSL -H "Authorization: Bearer $TOKEN" -o "$1" "$2"
+                    fi
+                else
+                    if [ -n "${3:-}" ]; then
+                        curl -fsSL -H "Accept: $3" -o "$1" "$2"
+                    else
+                        curl -fsSL -o "$1" "$2"
+                    fi
+                fi
+            }
+            if gh_fetch "$TMP_DIR/release.json" "https://api.github.com/repos/$GH_REPO/releases/tags/$GH_TAG"; then
+                python3 - "$TMP_DIR/release.json" > "$TMP_DIR/assets.tsv" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+for asset in data.get("assets", []):
+    print(f'{asset["name"]}\t{asset["url"]}')
+PY
+                asset_url() { awk -F'\t' -v n="$1" '$1==n { print $2 }' "$TMP_DIR/assets.tsv" | head -1; }
+
+                manifest_url="$(asset_url manifest.json)"
+                if [ -n "$manifest_url" ]; then
+                    gh_fetch "$TMP_DIR/manifest.json" "$manifest_url" 'application/octet-stream' \
+                        && ok "已下载 manifest.json"
+                fi
+
+                if [ -f "$TMP_DIR/manifest.json" ]; then
+                    file_list="$(python3 - "$TMP_DIR/manifest.json" "$ONLY_BRIDGE" "$BRIDGE_ID" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+only_bridge = sys.argv[2] == "1"
+bridge_id = sys.argv[3].lower()
+for ext in data.get("extensions", []):
+    if only_bridge and ext.get("id", "").lower() != bridge_id:
+        continue
+    print(ext.get("file", ""))
+PY
+)"
+                else
+                    file_list="$(cut -f1 "$TMP_DIR/assets.tsv" | grep '\.vsix$' || true)"
+                fi
+
+                for file_name in $file_list; do
+                    [ -n "$file_name" ] || continue
+                    url="$(asset_url "$file_name")"
+                    if [ -z "$url" ]; then warn "Release 中没有附件 $file_name"; continue; fi
+                    info "下载 $file_name"
+                    gh_fetch "$TMP_DIR/$file_name" "$url" 'application/octet-stream' || warn "下载失败 $file_name"
+                done
+                RELEASE_DIR="$TMP_DIR"
+            else
+                warn "获取 GitHub Release 失败（私有仓库请加 --token，或检查 tag 是否存在）"
+                SKIP_EXTENSIONS=1
+            fi
+        fi
+    elif [ -z "$RELEASE_DIR" ] && [ -n "$BASE_URL" ]; then
         TMP_DIR="$(mktemp -d)"
         BASE="${BASE_URL%/}"
         MANIFEST_URL="$BASE/manifest.json"

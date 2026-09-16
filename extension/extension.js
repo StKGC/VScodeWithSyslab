@@ -617,6 +617,12 @@ function updateStatusBar() {
 /* -------------------------------------------------------------------------- */
 
 const SYSLAB_EXTENSION_IDS = [
+    // 本工具包打包时已把四个 Syslab 扩展统一改写为 StKGC.* 前缀
+    'StKGC.syslab-julia',
+    'StKGC.julia-analyzer',
+    'StKGC.tymlang-ide',
+    'StKGC.app-designer',
+    // 旧前缀（未改写的原版安装）也一并报告，便于排查
     'TongYuan.syslab-julia',
     'TongYuan.julia-analyzer',
     'TongYuan.tymlang-ide',
@@ -673,7 +679,7 @@ async function activate(context) {
     try {
         stubCount = await registerShellCommandStubs(context);
     } catch (err) {
-        console.error('[syslab-bridge] 注册 Syslab 外壳命令占位失败：' + err.message);
+        console.error('[vscodewithsyslab] 注册 Syslab 外壳命令占位失败：' + err.message);
     }
 
     // 记录启动状态，便于事后确认 Syslab 扩展是否真的激活成功
@@ -689,7 +695,7 @@ async function activate(context) {
         await vscode.commands.executeCommand('setContext', 'shouldShowCodeSectionView', true);
     } catch (err) { /* 忽略 */ }
 
-    console.log('[syslab-bridge] activated. syslab=' +
+    console.log('[vscodewithsyslab] activated. syslab=' +
         (env && env.info ? env.info.syslabHome : '(未探测到)') +
         ' julia=' + (env ? env.juliaExe : '-') +
         ' envFile=' + envFilePath() +

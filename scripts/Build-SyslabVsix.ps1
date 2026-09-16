@@ -23,7 +23,8 @@
 param(
     [string]$TongYuanExtensionsDir,
     [switch]$Install,
-    [string[]]$Only
+    [string[]]$Only,
+    [string]$Publisher = 'StKGC'   # 统一发布者前缀：TongYuan.* → StKGC.*（仅改写打包副本，不改 Syslab 安装目录）
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,7 +61,8 @@ foreach ($pattern in $patterns) {
         Write-Warning "未找到扩展：$pattern"
         continue
     }
-    $vsix = & (Join-Path $scriptRoot 'New-SyslabVsix.ps1') -SourceDir $source.FullName -OutputDir $outputDir
+    $vsix = & (Join-Path $scriptRoot 'New-SyslabVsix.ps1') -SourceDir $source.FullName -OutputDir $outputDir `
+        -Publisher $Publisher -Force
     if ($vsix) { $built.Add([string]$vsix) }
 }
 

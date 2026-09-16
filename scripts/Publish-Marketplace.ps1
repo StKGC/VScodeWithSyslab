@@ -3,7 +3,7 @@
 .SYNOPSIS
     把桥接扩展发布到 VS Code Marketplace（上架后扩展面板可搜索，Settings Sync 可自动同步）。
 .DESCRIPTION
-    只发布本工具包自带的 syslab-bridge（MIT）。同元软控的 Syslab 扩展请勿上架。
+    只发布本工具包自带的 vscodewithsyslab（MIT）。同元软控的 Syslab 扩展请勿上架。
 
     一次性准备：
       1) 安装 Node.js LTS：winget install --id OpenJS.NodeJS.LTS -e    （或 https://nodejs.org）

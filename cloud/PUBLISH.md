@@ -3,16 +3,26 @@
 本文说明如何把本工具包产出的扩展发布到「云端」，让**多台机器 / 多个平台（Windows / Linux / macOS）**
 都能一条命令拉到并安装。
 
+> **当前采用的分发模型**：`release/` 是**本机构建产物**（已在 `.gitignore` 中忽略，不进 git 历史），
+> 发布时一把「打包 → 上传为 **GitHub Release 附件**」，其它机器用 `-GitHubRelease <owner/repo>@<tag>` /
+> `--github-release <owner/repo>@<tag>` 安装。仓库里只放源码与脚本。
+>
+> 本仓库当前发布：**`BlackTea-Lee/VScodeWithSyslab` @ `v1.0.0`**（私有），
+> 附件 = 4 个同元扩展 + `StKGC.vscodewithsyslab-1.0.0.vsix` + `manifest.json` + `SHA256SUMS.txt`。
+
 ---
 
 ## 0. 先分清两类扩展（合规红线）
 
 | 扩展 | 版权 | 能否公开上架市场 |
 | --- | --- | --- |
-| `StKGC.syslab-bridge`（publisher 可在 `extension\package.json` 改） | 本工具包（MIT） | ✅ 可以（VS Code Marketplace） |
-| `TongYuan.syslab-julia` / `julia-analyzer` / `tymlang-ide` / `app-designer` | 同元软控 | ❌ **不要**公开上架，仅限自有环境内部/私有渠道分发 |
+| `StKGC.vscodewithsyslab`（publisher/name 可在 `extension\package.json` 改） | 本工具包（MIT） | ✅ 可以（VS Code Marketplace） |
+| `StKGC.syslab-julia` / `StKGC.julia-analyzer` / `StKGC.tymlang-ide` / `StKGC.app-designer` | 同元软控（打包时已把发布者前缀由 `TongYuan.*` 统一改写为 `StKGC.*`） | ❌ **不要**公开上架，仅限自有环境内部/私有渠道分发 |
 
 > 因此推荐做法：**桥接扩展上市场（享受自动同步），同元的扩展走私有的发布包 + 引导脚本。**
+>
+> **前缀改写想恢复原样**：`Build-SyslabVsix.ps1 -Publisher TongYuan`，或改 `extension\package.json`
+> 的 `publisher` 后重新打包。改写只发生在 VSIX 副本里，Syslab 安装目录始终是原始的 `tongyuan.*`。
 
 ---
 
@@ -20,139 +30,129 @@
 
 | 渠道 | 适用 | 优点 | 注意 |
 | --- | --- | --- | --- |
-| GitHub Release（公开或私有仓库） | 个人/小团队 | 免费、版本化、可脚本下载 | 私有仓库下载需 Token；单文件 ≤2GB |
+| **GitHub Release 附件（当前采用）** | 个人/小团队 | 免费、版本化、可脚本下载、不占 git 历史 | 私有仓库需 Token（脚本会自动取 git 凭据）；单文件 ≤2GB |
 | 对象存储 / 静态站点（OSS/S3/COS/MinIO） | 团队、跨地域 | 稳定、可 CDN、可鉴权 | 需把 `release/` 目录整个上传并保持相对路径 |
 | 内网 HTTP（nginx / IIS / `python3 -m http.server`） | 公司内网 | 最简单、无外网依赖 | 记得配 HTTPS + 访问控制 |
 | 网盘 / SMB 共享（OneDrive、NAS、`\\server\share`） | 临时分发 | 零成本 | 脚本用本地路径即可，无需 HTTP |
 
-发布包结构（`Pack-ExtensionRelease.ps1` 生成）：
+发布包结构（`Pack-ExtensionRelease.ps1` 生成，本机产物，不入库）：
 
 ```
 release/
 ├─ manifest.json      # 扩展 ID/版本/文件名/SHA256/适用平台
 ├─ SHA256SUMS.txt     # sha256sum -c 可直接校验
-├─ TongYuan.syslab-julia-26.1.0.vsix
-├─ TongYuan.julia-analyzer-26.4.0.vsix
-├─ TongYuan.tymlang-ide-26.1.0.vsix
-├─ TongYuan.app-designer-26.1.0.vsix
-└─ StKGC.syslab-bridge-1.0.0.vsix     # 本工具包自带（publisher 可在 extension\package.json 改）
+├─ StKGC.syslab-julia-26.1.0.vsix
+├─ StKGC.julia-analyzer-26.4.0.vsix
+├─ StKGC.tymlang-ide-26.1.0.vsix
+├─ StKGC.app-designer-26.1.0.vsix
+└─ StKGC.vscodewithsyslab-1.0.0.vsix   # 本工具包自带（MIT）
 ```
 
 ---
 
-## 2. 生成发布包
+## 2. 生成发布包 + 上传为 Release 附件（推荐一条命令）
 
 ```powershell
-# Windows 侧（需要本机已装 MWORKS.Syslab）
-powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -PackVersion 2026.0916 -Zip
-#   -> release\            可直接上传的目录
-#   -> syslab-vscode-pack-2026.0916.zip   便于传网盘/Release 附件
+# 打包 + 创建/更新 Release 并上传附件（私有仓库自动使用 git 凭据管理器里的令牌）
+powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 `
+    -PackVersion 1.0.0 `
+    -PublishGitHub BlackTea-Lee/VScodeWithSyslab `
+    -Tag v1.0.0
+
+# 只打包不上传（本地/其它渠道分发时用）
+powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -PackVersion 1.0.1 -Zip
 ```
 
 参数：
 
-* `-PackVersion`：发布包版本（建议 `年.月日` 或语义化版本，便于多版本共存与回滚）
+* `-PackVersion`：发布包版本（本仓库用扩展版本号，如 `1.0.0`；也可用 `年.月日`）
+* `-PublishGitHub <owner/repo>`：上传为 Release 附件；`-Tag` 默认 `v<PackVersion>`
+* `-Token`：GitHub 令牌（默认取 `$env:GITHUB_TOKEN` / `$env:GH_TOKEN` / git 凭据管理器）
 * `-IncludeCopilot`：把 MWORKS Copilot 也打进去（需要 Syslab 账号/服务器，默认不含）
-* `-Zip`：额外打 zip
+* `-Zip`：额外打 zip；`-IncludeZipInRelease` 连 zip 一起上传
+
+上传结果（本仓库 v1.0.0 实测）：
+
+```
+Release: https://github.com/BlackTea-Lee/VScodeWithSyslab/releases/tag/v1.0.0
+附件   : 7 个（5 VSIX + manifest.json + SHA256SUMS.txt，约 76 MB）
+```
 
 ---
 
-## 3. 上传到云端
+## 3. 其它机器的安装方式
 
-### 3.0 本仓库现成的方式（仓库内已带 release/）
-
-本工具包仓库自身就是发布源，`release/` 已随仓库提交（VSIX + manifest.json + SHA256SUMS）。
-
-**公开仓库**（推荐，其它机器零凭据一条命令）：
+### 3.1 GitHub Release（推荐）
 
 ```powershell
 # Windows
-scripts\Install-ExtensionPack.ps1 -Source https://github.com/<你>/<仓库>/raw/main/release/manifest.json
+powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
+    -GitHubRelease BlackTea-Lee/VScodeWithSyslab@v1.0.0
+#   私有仓库：脚本自动取 git 凭据；也可显式 -Token $env:GITHUB_TOKEN
+#   只装桥接扩展：加 -OnlyBridge
+
 # Linux / macOS
+./install.sh --github-release BlackTea-Lee/VScodeWithSyslab@v1.0.0
+#   私有仓库加 --token <PAT>
+```
+
+实测输出：
+
+```
+=== 1/4 获取扩展发布包 ===  GitHub Release：BlackTea-Lee/VScodeWithSyslab@v1.0.0（已带令牌）
+                            已下载 manifest.json / 下载 StKGC.vscodewithsyslab-1.0.0.vsix
+=== 2/4 校验扩展包 ===      manifest.json：syslab-vscode-pack 1.0.0 · SHA256 校验通过
+=== 3/4 安装到 VS Code ===  已安装 StKGC.vscodewithsyslab-1.0.0.vsix
+=== 完成：成功安装 1 / 1 个扩展 ===
+```
+
+### 3.2 公开仓库：直接用 raw 链接（无需令牌）
+
+```powershell
+scripts\Install-ExtensionPack.ps1 -Source https://github.com/<你>/<仓库>/raw/main/release/manifest.json
 ./install.sh --base-url https://github.com/<你>/<仓库>/raw/main/release
 ```
+（注意：这样需要把 `/release/` 从 `.gitignore` 里去掉并提交，仓库会因此变大——本仓库**没有**这么做。）
 
-**私有仓库**（匿名 raw 会返回 404，用下面两种方式之一）：
+### 3.3 私有仓库且没有 git 凭据的机器
 
 ```powershell
-# 方式 A（推荐）：用 git 克隆后再本地安装，凭据交给 git/GCM，不用手管 Token
 git clone https://github.com/<你>/<仓库>.git
-scripts\Install-ExtensionPack.ps1 -Source .\<仓库>\release
-#   Linux / macOS： ./install.sh --vsix-dir ./<仓库>/release
-
-# 方式 B：给 raw 直链带 PAT（classic PAT 用 token 前缀，fine-grained 用 Bearer）
-scripts\Install-ExtensionPack.ps1 `
-  -Source https://raw.githubusercontent.com/<你>/<仓库>/main/release/manifest.json `
-  -Token $env:GH_TOKEN
+scripts\Install-ExtensionPack.ps1 -Source .\<仓库>\release      # 需该机器上已能 git 认证
+# 或者：申请一个只读 PAT，用 -Token
 ```
 
-> 判断仓库是公开还是私有：浏览器无痕窗口打开
-> `https://raw.githubusercontent.com/<你>/<仓库>/main/release/manifest.json`，
-> 能看到 JSON 就是公开；404 则是私有。
-> 想让所有人（或没有 git 凭据的机器）直接下载，把仓库改成 Public 即可
-> （Settings → General → Danger Zone → Change visibility）。
+### 3.4 对象存储 / 内网 HTTP / 网盘（可选渠道）
 
-### 3.1 GitHub Release
+先把 `release/` 目录（或那个 zip）上传/拷贝过去：
 
 ```bash
-# 一次性
-git remote add origin https://github.com/<你>/<仓库>.git
+# 对象存储（以阿里云 OSS 为例，任何静态托管同理：把 release 目录整体上传）
+ossutil cp -r release/ oss://my-bucket/syslab-pack/1.0.0/ --update
+# 基地址即为 https://my-bucket.oss-cn-xx.aliyuncs.com/syslab-pack/1.0.0/
 
-# 打 tag + Release，界面上把 release 目录里的文件作为附件上传（或用 gh CLI）
-git tag v2026.0916 && git push origin v2026.0916
-# 若已安装 gh：gh release create v2026.0916 release/* --title "Syslab pack 2026.0916"
-```
-
-安装端（私有仓库必须带 Token）：
-
-```powershell
-# GitHub Release 附件直链（公开）
-scripts\Install-ExtensionPack.ps1 -Source https://github.com/<你>/<仓库>/releases/download/v2026.0916/manifest.json
-# 私有仓库
-scripts\Install-ExtensionPack.ps1 -Source https://github.com/... -Token $env:GH_TOKEN
-```
-
-> 也可以只把 `syslab-vscode-pack-2026.0916.zip` 作为唯一附件上传，安装端 `-Source https://.../syslab-vscode-pack-2026.0916.zip`。
-
-### 3.2 对象存储 / 静态站点
-
-```bash
-# 以阿里云 OSS 为例（任何静态托管同理：把 release 目录整体上传）
-ossutil cp -r release/ oss://my-bucket/syslab-pack/2026.0916/ --update
-# 基地址即为 https://my-bucket.oss-cn-xx.aliyuncs.com/syslab-pack/2026.0916/
-```
-
-安装端：`-Source <基地址>/`（脚本会自动取 `<基地址>/manifest.json`）。
-需要鉴权的对象存储，可改用带签名的直链，或用 `-Token`（Bearer）。
-
-### 3.3 内网 HTTP
-
-```bash
-# 最快验证方式（临时）
+# 内网临时验证
 cd release && python3 -m http.server 8731 --bind 0.0.0.0
-# 正式环境：nginx 指向 release 目录
-#   location /syslab-pack/ { alias /srv/syslab-pack/; autoindex on; }
+# 正式环境 nginx：location /syslab-pack/ { alias /srv/syslab-pack/; autoindex on; }
 ```
 
-安装端：`-Source http://<ip>:8731/`
-
-### 3.4 网盘 / 共享目录
+然后安装端指过去：
 
 ```powershell
-# 直接指向解压后的目录或 UNC 路径，无需 HTTP
-scripts\Install-ExtensionPack.ps1 -Source D:\share\syslab-pack
+scripts\Install-ExtensionPack.ps1 -Source https://<基地址>/          # 目录里要有 manifest.json
 scripts\Install-ExtensionPack.ps1 -Source \\fileserver\share\syslab-pack
+./install.sh --base-url https://<基地址>/                            # Linux/macOS
 ```
 
 ---
 
-## 4. 其它机器安装（多平台）
+## 4. 多平台注意事项（前置条件）
 
 | 平台 | 命令 |
 | --- | --- |
-| Windows | `powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 -Source <基地址或目录>` |
-| Linux | `./install.sh --base-url <基地址>`（或 `--vsix-dir /path/to/release`） |
-| macOS | 同 Linux（`./install.sh --base-url <基地址>`） |
+| Windows | `powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 -GitHubRelease <owner/repo>@<tag>` |
+| Linux | `./install.sh --github-release <owner/repo>@<tag>`（或 `--base-url` / `--vsix-dir`） |
+| macOS | 同 Linux |
 
 Windows 的 `Install-ExtensionPack.ps1` 会：下载 → 按 `manifest.json` 校验 SHA256 → `code --install-extension --force`
 → 调用 `install.ps1 -SkipExtensions` 写入 Syslab 环境变量与 VS Code 设置。
@@ -197,7 +197,7 @@ Windows 的 `Install-ExtensionPack.ps1` 会：下载 → 按 `manifest.json` 校
 ## 6. 只上架桥接扩展（可选，享受自动同步）
 
 市场目前**不能**上传别人有版权的扩展，所以只上架本工具包自带的桥接扩展（MIT）。
-当前 publisher 已设为 **`StKGC`**，扩展 ID = `StKGC.syslab-bridge`（市场里统一记为小写 `stkgc.syslab-bridge`）。
+当前 publisher 已设为 **`StKGC`**，扩展 ID = `StKGC.vscodewithsyslab`（市场里统一记为小写 `stkgc.vscodewithsyslab`）。
 
 前置（一次性）：
 
@@ -218,13 +218,13 @@ powershell -ExecutionPolicy Bypass -File scripts\Publish-Marketplace.ps1
 等效的手工命令（脚本内部就是这一条）：
 
 ```powershell
-npx --yes @vscode/vsce publish --packagePath vsix\StKGC.syslab-bridge-1.0.0.vsix
+npx --yes @vscode/vsce publish --packagePath vsix\StKGC.vscodewithsyslab-1.0.0.vsix
 ```
 
 发布成功后：
 
 ```powershell
-code --install-extension stkgc.syslab-bridge     # 一条命令，任何平台
+code --install-extension stkgc.vscodewithsyslab     # 一条命令，任何平台
 ```
 
 并且 Settings Sync 会自动把它同步到你的其它机器 / 其它平台。
@@ -270,4 +270,3 @@ A：不同版本行为不一致，本工具包统一**先下载再本地安装**
 
 **Q：机器没网/内网隔离怎么办？**
 A：把 `syslab-vscode-pack-<版本>.zip` 拷过去解压，然后
-`Install-ExtensionPack.ps1 -Source <解压目录>` / `./install.sh --vsix-dir <解压目录>`。

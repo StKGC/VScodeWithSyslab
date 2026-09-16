@@ -10,7 +10,7 @@
          （与 Syslab 主程序 out/syslab-environment-win32.js 完全一致的变量集合）；
       3. 把 Syslab 自带扩展（tongyuan.syslab-julia / julia-analyzer / tymlang-ide / app-designer）
          安装到 VS Code 的用户扩展目录；
-      4. 安装本工具包的桥接扩展 syslab-bridge（运行脚本 / REPL / 打开 Syslab / 环境自检）；
+      4. 安装本工具包的桥接扩展 vscodewithsyslab（运行脚本 / REPL / 打开 Syslab / 环境自检）；
       5. 合并 VS Code 设置：julia 解释器路径、终端环境、Syslab 终端配置文件等。
 
 .PARAMETER SyslabHome
@@ -166,9 +166,11 @@ if (-not $SkipExtensions) {
         Write-Info "使用 VSIX + code CLI 安装（code.cmd: $codeCmd）"
 
         $bridge = Get-BridgeExtensionInfo -KitRoot $KitRoot
-        $managedIds = @('tongyuan.syslab-julia', 'tongyuan.julia-analyzer', 'tongyuan.tymlang-ide',
-            'tongyuan.app-designer', 'tongyuan.mworks-syslab-copilot', $bridge.IdLower,
-            'syslab-community.syslab-bridge')   # 最后一个是历史发布者，保留以便清理
+        $syslabIds = @('syslab-julia', 'julia-analyzer', 'tymlang-ide', 'app-designer', 'mworks-syslab-copilot')
+        $managedIds = @($syslabIds | ForEach-Object { "$($bridge.Publisher).$_".ToLower() })
+        # 历次改名的旧 ID / 旧发布者，保留以便清理
+        $managedIds += @($syslabIds | ForEach-Object { "tongyuan.$_" })
+        $managedIds += @($bridge.IdLower, 'stkgc.syslab-bridge', 'syslab-community.syslab-bridge')
 
         # 4.0 清理“残缺安装”：目录存在但没有 package.json，说明上次安装中断，必须删掉重装
         foreach ($managedId in $managedIds) {
@@ -203,10 +205,11 @@ if (-not $SkipExtensions) {
                 }
         }
 
-        # 4.2 打包并安装 Syslab 自带扩展
+        # 4.2 打包并安装 Syslab 自带扩展（打包时统一改写发布者前缀为 $($bridge.Publisher)）
         $vsixList = @()
         if (Test-Path $tongYuanExtDir) {
-            $vsixList += & (Join-Path $KitRoot 'scripts\Build-SyslabVsix.ps1') -TongYuanExtensionsDir $tongYuanExtDir -Only $wanted
+            $vsixList += & (Join-Path $KitRoot 'scripts\Build-SyslabVsix.ps1') -TongYuanExtensionsDir $tongYuanExtDir `
+                -Only $wanted -Publisher $bridge.Publisher
         }
         else {
             Write-Warn2 "未找到 Syslab 的扩展目录：$tongYuanExtDir（跳过 Syslab 扩展安装）"
@@ -261,7 +264,9 @@ if (-not $SkipExtensions) {
 
         # 4.5 校验
         $listed = & $codeCmd --list-extensions 2>&1
-        foreach ($id in 'tongyuan.syslab-julia', 'tongyuan.tymlang-ide', 'tongyuan.julia-analyzer', $bridge.IdLower) {
+        $expectIds = @("$($bridge.Publisher).syslab-julia", "$($bridge.Publisher).tymlang-ide",
+            "$($bridge.Publisher).julia-analyzer", $bridge.IdLower)
+        foreach ($id in $expectIds) {
             if ($listed -match [regex]::Escape($id)) { Write-Ok "VS Code 已识别 $id" }
             else { Write-Warn2 "VS Code 未识别 $id（可稍后在扩展面板中确认）" }
         }
@@ -352,7 +357,7 @@ else {
 # 汇总
 # ---------------------------------------------------------------------------
 Write-Step '安装完成'
-Write-Host "  Syslab 自带的 Julia/Syslab 扩展 + syslab-bridge 已就绪。" -ForegroundColor Green
+Write-Host "  Syslab 自带的 Julia/Syslab 扩展 + $($bridge.Id) 已就绪。" -ForegroundColor Green
 Write-Host ''
 Write-Host '  推荐打开方式（带完整 Syslab 环境启动 VS Code）：' -ForegroundColor White
 Write-Host "    $(Join-Path $KitRoot 'bin\Syslab-Code.cmd')" -ForegroundColor Yellow

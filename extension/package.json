@@ -1,6 +1,6 @@
 {
-  "name": "syslab-bridge",
-  "displayName": "MWORKS Syslab Bridge",
+  "name": "vscodewithsyslab",
+  "displayName": "VScodeWithSyslab (MWORKS Syslab Bridge)",
   "description": "在原生 VS Code 中使用 MWORKS.Syslab 的 Julia / M 语言环境：运行脚本、启动 Syslab REPL、打开 Syslab、环境自检。",
   "version": "1.0.0",
   "publisher": "StKGC",

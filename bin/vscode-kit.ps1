@@ -1,7 +1,7 @@
 ﻿#requires -version 5.1
 <#
 .SYNOPSIS
-    Syslab-Bridge 工具包的公共辅助函数（VS Code 定位、扩展安装、JSONC 读写）。
+    VScodeWithSyslab 工具包的公共辅助函数（VS Code 定位、扩展安装、JSONC 读写）。
 .DESCRIPTION
     由 install.ps1 / uninstall.ps1 / scripts\*.ps1 dot-source 使用。
 #>
@@ -108,6 +108,72 @@ function Get-BridgeExtensionInfo {
         VsixName    = "$id-$($pkg.version).vsix"
         VsixPath    = Join-Path $KitRoot ("vsix\$id-$($pkg.version).vsix")
     }
+}
+
+# ---------------------------------------------------------------------------
+# 统一扩展发布者前缀（把 TongYuan.* 整合为 StKGC.*）
+#
+# 只作用于「暂存的扩展副本」（即打进 VSIX 的那一份），不改 MWORKS.Syslab 安装目录。
+# 处理两类内容：
+#   1) package.json 的 "publisher" 字段；
+#   2) 各处对扩展 ID 的引用（含 extensionDependencies、when 条件里的正则、
+#      以及 JS 产物里硬编码的同伴扩展 ID），例如 TongYuan.syslab-julia → StKGC.syslab-julia。
+#
+# 注意：**只替换「发行者.扩展名」这种完整 ID**，绝不替换裸的 TongYuan——
+#       环境变量里的 C:/Users/Public/TongYuan 是 Syslab 的共享目录路径，动了会直接坏掉。
+#
+# 版权提醒：同元软控扩展的著作权仍归其所有，本改写仅用于自有环境的私有分发，
+#           请勿把改写后的包公开上架到 VS Code Marketplace。
+# ---------------------------------------------------------------------------
+function Set-ExtensionPublisherPrefix {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ExtensionDir,
+        [Parameter(Mandatory)][string]$Publisher,
+        [string[]]$OldPublishers = @('TongYuan', 'tongyuan'),
+        [string[]]$ExtensionNames = @('syslab-julia', 'julia-analyzer', 'tymlang-ide', 'app-designer', 'mworks-syslab-copilot')
+    )
+
+    $applied = New-Object System.Collections.Generic.List[string]
+
+    function Set-FileTextPreservingBom {
+        param([string]$Path, [string]$Text)
+        $bytes = [System.IO.File]::ReadAllBytes($Path)
+        $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+        [System.IO.File]::WriteAllText($Path, $Text, [System.Text.UTF8Encoding]::new($hasBom))
+    }
+
+    # 1) package.json 的 publisher 字段
+    $pkgPath = Join-Path $ExtensionDir 'package.json'
+    if (Test-Path $pkgPath) {
+        $text = [System.IO.File]::ReadAllText($pkgPath, [System.Text.UTF8Encoding]::new($false))
+        $updated = [regex]::Replace($text, '("publisher"\s*:\s*")[^"]*(")', "`${1}$Publisher`${2}")
+        if ($updated -ne $text) {
+            Set-FileTextPreservingBom -Path $pkgPath -Text $updated
+            $applied.Add("package.json : publisher -> $Publisher")
+        }
+    }
+
+    # 2) 扩展 ID 引用（package.json / JS 产物）
+    $files = Get-ChildItem $ExtensionDir -Recurse -File -Include '*.js', '*.json' -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notmatch '\\node_modules\\' -and $_.Length -lt 50MB }
+
+    foreach ($file in $files) {
+        $text = [System.IO.File]::ReadAllText($file.FullName, [System.Text.UTF8Encoding]::new($false))
+        $updated = $text
+        foreach ($oldPublisher in $OldPublishers) {
+            foreach ($extensionName in $ExtensionNames) {
+                $updated = $updated.Replace("$oldPublisher.$extensionName", "$Publisher.$extensionName")
+            }
+        }
+        if ($updated -ne $text) {
+            Set-FileTextPreservingBom -Path $file.FullName -Text $updated
+            $relative = $file.FullName.Substring($ExtensionDir.TrimEnd('\', '/').Length + 1)
+            $applied.Add("$relative : 扩展 ID 前缀 -> $Publisher")
+        }
+    }
+
+    return $applied
 }
 
 # ---------------------------------------------------------------------------
@@ -416,4 +482,161 @@ function New-ZipArchiveFromDirectory {
     finally { $zip.Dispose() }
 
     return $ZipPath
+}
+
+# ---------------------------------------------------------------------------
+# GitHub Release 支持（发布包放 Release 附件，避免 git 历史随发版变大）
+#
+#   · Publish-GitHubRelease   ：创建/复用 tag 对应的 Release，并上传（或覆盖）附件
+#   · Get-GitHubReleaseAssets ：列出某 Release 的附件
+#   · Save-GitHubReleaseAsset ：按附件 id 下载（私有仓库走 API + Accept: octet-stream）
+#
+# 令牌来源优先级：显式 -Token → $env:GITHUB_TOKEN / $env:GH_TOKEN → git 凭据管理器
+# ---------------------------------------------------------------------------
+function Get-GitHubToken {
+    [CmdletBinding()]
+    param([string]$Token)
+
+    if ($Token) { return $Token }
+    foreach ($name in 'GITHUB_TOKEN', 'GH_TOKEN') {
+        $value = [System.Environment]::GetEnvironmentVariable($name)
+        if ($value) { return $value }
+    }
+    try {
+        $cred = ("protocol=https`nhost=github.com`n`n" | & git credential fill) 2>$null
+        $stored = ($cred | Where-Object { $_ -like 'password=*' } | Select-Object -First 1)
+        if ($stored) { return ($stored -replace '^password=', '') }
+    }
+    catch { }
+    return $null
+}
+
+function Get-GitHubHeaders {
+    [CmdletBinding()]
+    param([string]$Token, [string]$Accept = 'application/vnd.github+json')
+
+    $headers = @{ 'User-Agent' = 'VScodeWithSyslab'; Accept = $Accept }
+    if ($Token) { $headers['Authorization'] = "Bearer $Token" }
+    return $headers
+}
+
+function Get-GitHubReleaseByTag {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Repository,   # owner/repo
+        [Parameter(Mandatory)][string]$Tag,
+        [string]$Token
+    )
+
+    $headers = Get-GitHubHeaders -Token $Token
+    try {
+        return Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/tags/$Tag" `
+            -Headers $headers -Method Get -TimeoutSec 120
+    }
+    catch {
+        return $null
+    }
+}
+
+function Publish-GitHubRelease {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Repository,          # owner/repo
+        [Parameter(Mandatory)][string]$Tag,                 # 例如 v1.0.0
+        [Parameter(Mandatory)][string[]]$AssetPaths,
+        [string]$Name,
+        [string]$Body = '',
+        [string]$TargetCommitish = 'main',
+        [string]$Token,
+        [switch]$Draft,
+        [switch]$Prerelease
+    )
+
+    $Token = Get-GitHubToken -Token $Token
+    if (-not $Token) { throw '未找到 GitHub 令牌（可用 -Token、$env:GITHUB_TOKEN 或在 git 凭据管理器里登录过 GitHub）。' }
+    if (-not $Name) { $Name = $Tag }
+
+    $headers = Get-GitHubHeaders -Token $Token
+    $release = Get-GitHubReleaseByTag -Repository $Repository -Tag $Tag -Token $Token
+
+    if (-not $release) {
+        Write-Host "  创建 Release $Tag ..."
+        $payloadJson = @{
+            tag_name         = $Tag
+            target_commitish = $TargetCommitish
+            name             = $Name
+            body             = $Body
+            draft            = [bool]$Draft
+            prerelease       = [bool]$Prerelease
+        } | ConvertTo-Json -Depth 5
+        # 必须发 UTF-8 字节：PowerShell 5.1 以字符串发请求体时会把中文按非 UTF-8 编码，
+        # 导致 GitHub 返回 "Problems parsing JSON"
+        $payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($payloadJson)
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases" `
+            -Headers $headers -Method Post -Body $payloadBytes `
+            -ContentType 'application/json; charset=utf-8' -TimeoutSec 120
+        Write-Host "  Release 已创建：$($release.html_url)"
+    }
+    else {
+        Write-Host "  复用已有 Release：$($release.html_url)"
+    }
+
+    $uploaded = @()
+    foreach ($path in $AssetPaths) {
+        if (-not (Test-Path $path)) { Write-Warning "附件不存在，跳过：$path"; continue }
+        $file = Get-Item $path
+        $assetName = $file.Name
+
+        # 同名附件先删掉，保证可重复执行
+        $existing = $release.assets | Where-Object { $_.name -eq $assetName }
+        foreach ($old in $existing) {
+            Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/assets/$($old.id)" `
+                -Headers $headers -Method Delete -TimeoutSec 120 | Out-Null
+            Write-Host "  已删除同名旧附件 $assetName"
+        }
+
+        $uploadUrl = "https://uploads.github.com/repos/$Repository/releases/$($release.id)/assets?name=$([uri]::EscapeDataString($assetName))"
+        Write-Host ("  上传 {0}（{1:N1} MB）..." -f $assetName, ($file.Length / 1MB))
+        Invoke-RestMethod -Uri $uploadUrl -Headers $headers -Method Post -InFile $file.FullName `
+            -ContentType 'application/octet-stream' -TimeoutSec 3600 | Out-Null
+        $uploaded += $assetName
+        Write-Host "    [OK] $assetName"
+    }
+
+    $release = Get-GitHubReleaseByTag -Repository $Repository -Tag $Tag -Token $Token
+    return [pscustomobject]@{
+        Tag       = $Tag
+        HtmlUrl   = $release.html_url
+        ReleaseId = $release.id
+        Assets    = ($release.assets | Select-Object -ExpandProperty name)
+        Uploaded  = $uploaded
+    }
+}
+
+function Get-GitHubReleaseAssets {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Repository,
+        [Parameter(Mandatory)][string]$Tag,
+        [string]$Token
+    )
+
+    $release = Get-GitHubReleaseByTag -Repository $Repository -Tag $Tag -Token (Get-GitHubToken -Token $Token)
+    if (-not $release) { throw "未找到 Release：$Repository@$Tag" }
+    return $release.assets
+}
+
+function Save-GitHubReleaseAsset {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Asset,        # Get-GitHubReleaseAssets 返回的对象
+        [Parameter(Mandatory)][string]$OutFile,
+        [string]$Token
+    )
+
+    $Token = Get-GitHubToken -Token $Token
+    # 附件下载走 API + octet-stream，公开/私有仓库都可用（私有必须带令牌）
+    $headers = Get-GitHubHeaders -Token $Token -Accept 'application/octet-stream'
+    Invoke-WebRequest -Uri $Asset.url -Headers $headers -OutFile $OutFile -UseBasicParsing -TimeoutSec 3600
+    return $OutFile
 }

@@ -57,7 +57,8 @@ function Get-JsonField([string]$text, [string]$field) {
     if ($m.Success) { return $m.Groups[1].Value }
     return ''
 }
-if (-not $Publisher) { $Publisher = Get-JsonField $packageText 'publisher' }
+$sourcePublisher = Get-JsonField $packageText 'publisher'
+if (-not $Publisher) { $Publisher = $sourcePublisher }
 if (-not $Name) { $Name = Get-JsonField $packageText 'name' }
 if (-not $Version) { $Version = Get-JsonField $packageText 'version' }
 if (-not $DisplayName) {
@@ -103,6 +104,13 @@ if ($LASTEXITCODE -ge 8) { throw "复制扩展文件失败（robocopy 退出码 
 # ---- 兼容性补丁（只作用于暂存副本，不改 Syslab 安装目录） ----
 foreach ($patchInfo in (Invoke-SyslabCompatPatch -ExtensionDir $stageExtension)) {
     Write-Host "  兼容补丁：$patchInfo" -ForegroundColor Yellow
+}
+
+# ---- 统一发布者前缀（例如 TongYuan.* → StKGC.*，同样只改暂存副本） ----
+if ($Publisher -and $sourcePublisher -and ($Publisher -ne $sourcePublisher)) {
+    foreach ($prefixInfo in (Set-ExtensionPublisherPrefix -ExtensionDir $stageExtension -Publisher $Publisher)) {
+        Write-Host "  发布者前缀：$prefixInfo" -ForegroundColor Yellow
+    }
 }
 
 # ---- extension.vsixmanifest ----

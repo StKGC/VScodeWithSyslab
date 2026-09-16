@@ -1,6 +1,6 @@
 # VScodeWithSyslab
 
-> 项目名 / 仓库名：**VScodeWithSyslab** ｜ 扩展 ID：`StKGC.syslab-bridge`（安装后显示为 `stkgc.syslab-bridge`）
+> 项目名 / 仓库名：**VScodeWithSyslab** ｜ 扩展 ID：`StKGC.vscodewithsyslab`（安装后显示为 `stkgc.vscodewithsyslab`）
 > 仓库：https://github.com/BlackTea-Lee/VScodeWithSyslab （私有）
 
 让 **MWORKS.Syslab** 的编辑器与脚本运行能力在**原生 VS Code** 里可用：
@@ -12,10 +12,10 @@ Syslab 包（TyBase / TyMath / TyPlot …），运行脚本、启动 REPL、调�
 **本机实测结果**（VS Code 1.137/1.138 + MWORKS.Syslab 2026b 26.6.1）：
 
 ```
-TongYuan.syslab-julia     installed=true  active=true
-TongYuan.julia-analyzer   installed=true  active=true
-TongYuan.tymlang-ide      installed=true  active=true
-TongYuan.app-designer     installed=true  active=true
+StKGC.syslab-julia     installed=true  active=true
+StKGC.julia-analyzer   installed=true  active=true
+StKGC.tymlang-ide      installed=true  active=true
+StKGC.app-designer     installed=true  active=true
 julia 进程                由 Code.exe 启动（Syslab REPL / 语言服务）
 ```
 
@@ -27,10 +27,17 @@ Syslab 本身是一个 VS Code（Code-OSS）分支，编辑器能力来自这几
 
 | 扩展 | 作用 |
 | --- | --- |
-| `TongYuan.syslab-julia` | Julia 语言支持：运行/调试脚本、REPL、工作区变量、绘图面板、代码块执行…（julia-vscode 的 Syslab 定制版） |
-| `TongYuan.julia-analyzer` | Julia 静态分析与语言服务（julia-analyzer 二进制） |
-| `TongYuan.tymlang-ide` | M 语言（TyMLang，`.m` / `.tym`）编辑、运行与调试 |
-| `TongYuan.app-designer` | Syslab APP Designer |
+| `StKGC.syslab-julia` | Julia 语言支持：运行/调试脚本、REPL、工作区变量、绘图面板、代码块执行…（julia-vscode 的 Syslab 定制版） |
+| `StKGC.julia-analyzer` | Julia 静态分析与语言服务（julia-analyzer 二进制） |
+| `StKGC.tymlang-ide` | M 语言（TyMLang，`.m` / `.tym`）编辑、运行与调试 |
+| `StKGC.app-designer` | Syslab APP Designer |
+
+> **发布者前缀说明（重要）**：打包时会把四个 Syslab 扩展的发布者前缀**统一改写为 `StKGC`**
+> （整合前是 `TongYuan.*`），让整套扩展落在同一命名空间、便于统一安装/卸载/分发。
+> 改写**只作用于打进 VSIX 的副本**（含 `package.json`、`extensionDependencies`、以及 JS 产物里
+> 硬编码的扩展 ID），**不动 MWORKS.Syslab 安装目录**（源目录仍是 `tongyuan.*`）。
+> 扩展的**著作权与许可仍归同元软控**，本改写仅用于自有环境的私有分发，**请勿公开上架 VS Code Marketplace**。
+> 想恢复原始前缀：`Build-SyslabVsix.ps1 -Publisher TongYuan`（或直接改 `extension\package.json` 的 `publisher`）。
 
 这些扩展运行时依赖一组环境变量，由 Syslab 主程序在 `out/syslab-environment-win32.js` 注入：
 
@@ -51,7 +58,7 @@ PATH / PYTHON / KMP_DUPLICATE_LIB_OK / JULIA_USE_FLISP_PARSER ...
 2. 把 Syslab 自带扩展**打包成 VSIX，用 `code --install-extension` 正式安装**
    （VS Code 1.7x 起不再识别手工拷贝到 `~/.vscode/extensions` 的扩展目录）；
 3. 打**兼容性补丁**（见第五节），修掉 Syslab 扩展在原生 VS Code 里的两处硬冲突；
-4. 附带桥接扩展 `syslab-bridge`，提供 `运行当前脚本`、`Syslab REPL`、`运行选中代码`、
+4. 附带桥接扩展 `vscodewithsyslab`，提供 `运行当前脚本`、`Syslab REPL`、`运行选中代码`、
    `环境自检`、`用 Syslab 打开` 等命令，并补齐 Syslab 外壳专有命令占位。
 
 ---
@@ -98,7 +105,7 @@ MWORKS\
 │   ├─ Start-SyslabCode.ps1     同上（PowerShell 实现）
 │   ├─ Syslab-Shell.cmd         打开带 Syslab 环境的 Julia REPL
 │   └─ Start-SyslabShell.ps1    同上（PowerShell 实现）
-├─ extension\                   桥接扩展源码（StKGC.syslab-bridge，publisher 可在 package.json 里改）
+├─ extension\                   桥接扩展源码（StKGC.vscodewithsyslab，publisher 可在 package.json 里改）
 ├─ scripts\
 │   ├─ Build-SyslabVsix.ps1     把 Syslab 扩展打包为 VSIX（-Install 可直接安装）
 │   ├─ New-SyslabVsix.ps1       单个扩展目录 → VSIX（自动应用兼容补丁）
@@ -153,7 +160,7 @@ Syslab 扩展是按 Syslab 自己的外壳写的，直接搬到原生 VS Code �
 （只作用于 VSIX 里的副本与已安装副本，不改 Syslab 安装目录）：
 
 1. **命令名冲突**
-   `tongyuan.syslab-julia` 在 activate 阶段注册通用命令名 `extension.refreshTreeView`，
+   `StKGC.syslab-julia` 在 activate 阶段注册通用命令名 `extension.refreshTreeView`，
    而第三方扩展（本机是 `mermaidchart.vscode-mermaid-chart`）也注册了同名命令，
    VS Code 对重复注册直接抛异常：
    `Error: command 'extension.refreshTreeView' already exists` → 整个扩展激活失败。
@@ -193,7 +200,7 @@ TyBase/TyMath/TyPlot 首次加载需要预编译（本机约 10 秒，冷启动�
 `JULIA_DEPOT_PATH/compiled` 缓存。
 
 **5. `.m` 文件被 MATLAB 扩展抢走？**
-`.m` 同时被 `mathworks.language-matlab` 与 `tongyuan.tymlang-ide` 声明。可在 VS Code
+`.m` 同时被 `mathworks.language-matlab` 与 `StKGC.tymlang-ide` 声明。可在 VS Code
 右下角语言模式里选择 *M*，或写工作区设置：
 
 ```jsonc
@@ -222,14 +229,14 @@ powershell -ExecutionPolicy Bypass -File uninstall.ps1 -RestoreSettings    # 还
 
 ## 七、在其它机器上离线安装
 
-`vsix\` 目录里的包可以直接拷走（`TongYuan.syslab-julia` 约 38 MB、`TongYuan.app-designer` 约 29 MB）：
+`vsix\` 目录里的包可以直接拷走（`StKGC.syslab-julia` 约 38 MB、`StKGC.app-designer` 约 29 MB）：
 
 ```powershell
-code --install-extension vsix\TongYuan.syslab-julia-26.1.0.vsix --force
-code --install-extension vsix\TongYuan.julia-analyzer-26.4.0.vsix --force
-code --install-extension vsix\TongYuan.tymlang-ide-26.1.0.vsix --force
-code --install-extension vsix\TongYuan.app-designer-26.1.0.vsix --force
-code --install-extension vsix\StKGC.syslab-bridge-1.0.0.vsix --force
+code --install-extension vsix\StKGC.syslab-julia-26.1.0.vsix --force
+code --install-extension vsix\StKGC.julia-analyzer-26.4.0.vsix --force
+code --install-extension vsix\StKGC.tymlang-ide-26.1.0.vsix --force
+code --install-extension vsix\StKGC.app-designer-26.1.0.vsix --force
+code --install-extension vsix\StKGC.vscodewithsyslab-1.0.0.vsix --force
 ```
 
 目标机器仍需安装 MWORKS.Syslab（提供 Julia 运行时与包），再运行一次 `install.ps1`
@@ -239,35 +246,36 @@ code --install-extension vsix\StKGC.syslab-bridge-1.0.0.vsix --force
 
 ## 八、上云下载与多平台同步
 
-**一句话方案**：`Pack-ExtensionRelease.ps1` 生成发布包 → 上传到 GitHub Release / 对象存储 / 内网 HTTP
-→ 其它机器用 `Install-ExtensionPack.ps1`（Windows）或 `install.sh`（Linux/macOS）一条命令拉取安装。
-完整指南（含合规说明与市场发布步骤）见 **`cloud\PUBLISH.md`**。
+**分发模型**：`release/`（VSIX + manifest.json + SHA256SUMS）只是**本机构建产物**，已加入 `.gitignore`；
+发布时用 `Pack-ExtensionRelease.ps1 -PublishGitHub` 一把「打包 → 上传为 GitHub Release 附件」，
+其它机器用 `-GitHubRelease <owner/repo>@<tag>` 一条命令安装。
+**仓库里只放源码与脚本，git 历史不会随每次发版变大。** 完整指南见 **`cloud\PUBLISH.md`**。
 
 ```powershell
-# ① 生成本机发布包（含 manifest.json + SHA256SUMS.txt，可 -Zip 打成单个 zip）
-powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -PackVersion 2026.0916 -Zip
+# ① 打包 + 上传为 GitHub Release 附件（私有仓库自动使用 git 已保存的凭据）
+powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 `
+    -PackVersion 1.0.0 -PublishGitHub BlackTea-Lee/VScodeWithSyslab -Tag v1.0.0
 
-# ② 分发（二选一）
-#    2a) 用 GitHub 仓库当下载源：把 release\ 一起提交推送（.gitignore 已保留 release\）
-#        其它机器直接指 raw 链接即可：
-#        -Source https://github.com/<你>/<仓库>/raw/main/release/manifest.json
-#    2b) 用 GitHub Release / 对象存储 / nginx / 网盘：上传 release\ 目录或那个 zip
+# ② 其它机器安装（Windows）：下载 + SHA256 校验 + 安装 + 写环境，一步到位
+powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
+    -GitHubRelease BlackTea-Lee/VScodeWithSyslab@v1.0.0
+#   私有仓库会自动取 git 凭据（也可显式 -Token / $env:GITHUB_TOKEN）；只装桥接扩展加 -OnlyBridge
 
-# ③ 其它机器（Windows）：下载 + 校验 + 安装 + 写环境，一步到位
-powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 -Source https://<你的地址>/syslab-pack/
-#    只装桥接扩展：加 -OnlyBridge
-
-# ③ 其它机器（Linux / macOS）
-./install.sh --base-url https://<你的地址>/syslab-pack/
-
-# ④ 私有 GitHub 仓库（匿名 raw 会 404）：克隆后用本地目录安装，凭据交给 git 即可
-git clone https://github.com/<你>/<仓库>.git
-scripts\Install-ExtensionPack.ps1 -Source .\<仓库>\release        # Linux/macOS: ./install.sh --vsix-dir ./<仓库>/release
+# ② 其它机器安装（Linux / macOS）
+./install.sh --github-release BlackTea-Lee/VScodeWithSyslab@v1.0.0
 ```
 
-> 本仓库已推到 `https://github.com/BlackTea-Lee/VScodeWithSyslab`（项目名 / 仓库名：**VScodeWithSyslab**），
-> `release/` 随仓库一起提交；该仓库目前是**私有**的，所以其它机器请用上面的「克隆 + 本地目录」方式，
-> 或在 GitHub 上把仓库改成 Public 后直接用 raw 链接。
+其它分发方式（对象存储 / 内网 nginx / 网盘 / 仓库内 raw）与私有仓库注意事项见 `cloud\PUBLISH.md`；
+`Install-ExtensionPack.ps1 -Source <目录|zip|基地址>` 与 `install.sh --base-url/--vsix-dir` 均保留。
+
+实测（Release 附件下载 + 校验 + 安装）：
+
+```
+Release: https://github.com/BlackTea-Lee/VScodeWithSyslab/releases/tag/v1.0.0
+附件   : StKGC.syslab-julia-26.1.0.vsix / julia-analyzer / tymlang-ide / app-designer
+         StKGC.vscodewithsyslab-1.0.0.vsix / manifest.json / SHA256SUMS.txt
+安装   : 已下载 manifest.json → 下载 StKGC.vscodewithsyslab-1.0.0.vsix → SHA256 校验通过 → 已安装
+```
 
 **把桥接扩展上架市场（可选，上架后扩展面板可搜索 + Settings Sync 自动同步）**：
 
@@ -279,19 +287,10 @@ powershell -ExecutionPolicy Bypass -File scripts\Publish-Marketplace.ps1
 # 想先只打包检查：加 -PackageOnly
 ```
 
-实测（本机用一个本地 HTTP 服务模拟云端）：
-
-```
-=== 1/4 获取扩展发布包 ===  下载 manifest.json / 下载 StKGC.syslab-bridge-1.0.0.vsix
-=== 2/4 校验扩展包 ===      syslab-vscode-pack 2026.0916 · 源自 MWORKS.Syslab 2026b / Julia 1.10.10 · SHA256 校验通过
-=== 3/4 安装到 VS Code ===  已安装 StKGC.syslab-bridge-1.0.0.vsix
-=== 完成：成功安装 1 / 1 个扩展 ===
-```
-
 **关于 VS Code 多平台同步（Settings Sync）的关键事实**：
 
 * Settings Sync 同步的是**扩展清单**，新机器从**扩展市场**重新下载 —— 私有 VSIX 不会被同步；
-* 所以：`syslab-bridge` 可以上架市场（MIT，允许），上架后打开同步即自动装好，跨平台开箱可用；
+* 所以：`vscodewithsyslab` 可以上架市场（MIT，允许），上架后打开同步即自动装好，跨平台开箱可用；
 * 同元软控的 4 个扩展**不要公开上架**，用发布包 + 引导脚本（开机任务 / Intune / Ansible）兜底；
 * 目标平台仍需各自安装 MWORKS.Syslab 并运行 `install.ps1` / `install.sh` 生成环境变量
   （Linux/macOS 的 Julia 路径、Depot、`LD_LIBRARY_PATH` 与 Windows 不同，脚本已按 Syslab 的
@@ -333,10 +332,10 @@ VS Code 端（`%USERPROFILE%\.syslab-vscode\bridge-status.json`，打开 `.jl` /
   "envSource": "C:\\Users\\29136\\.syslab-vscode\\env.json",
   "juliaAvailable": true,
   "syslabExtensions": {
-    "TongYuan.syslab-julia":   { "installed": true, "active": true },
-    "TongYuan.julia-analyzer": { "installed": true, "active": true },
-    "TongYuan.tymlang-ide":    { "installed": true, "active": true },
-    "TongYuan.app-designer":   { "installed": true, "active": true }
+    "StKGC.syslab-julia":   { "installed": true, "active": true },
+    "StKGC.julia-analyzer": { "installed": true, "active": true },
+    "StKGC.tymlang-ide":    { "installed": true, "active": true },
+    "StKGC.app-designer":   { "installed": true, "active": true }
   },
   "shellStubs": 78
 }

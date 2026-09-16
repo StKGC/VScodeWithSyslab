@@ -273,7 +273,7 @@ code --install-extension vsix\StKGC.syslab-julia-26.1.0.vsix --force
 code --install-extension vsix\StKGC.julia-analyzer-26.4.0.vsix --force
 code --install-extension vsix\StKGC.tymlang-ide-26.1.0.vsix --force
 code --install-extension vsix\StKGC.app-designer-26.1.0.vsix --force
-code --install-extension vsix\StKGC.vscodewithsyslab-1.0.0.vsix --force
+code --install-extension vsix\StKGC.vscodewithsyslab-1.2.0.vsix --force
 ```
 
 目标机器仍需安装 MWORKS.Syslab（提供 Julia 运行时与包），再运行一次 `install.ps1`
@@ -305,7 +305,7 @@ powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
 其它分发方式（对象存储 / 内网 nginx / 网盘 / 仓库内 raw）与私有仓库注意事项见 `cloud\PUBLISH.md`；
 `Install-ExtensionPack.ps1 -Source <目录|zip|基地址>` 与 `install.sh --base-url/--vsix-dir` 均保留。
 
-实测（Release 附件下载 + 校验 + 安装）：
+实测（Release 附件下载 + 校验 + 安装，v1.0.0 首版记录）：
 
 ```
 Release: https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.0.0
@@ -313,6 +313,10 @@ Release: https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.0.0
          StKGC.vscodewithsyslab-1.0.0.vsix / manifest.json / SHA256SUMS.txt
 安装   : 已下载 manifest.json → 下载 StKGC.vscodewithsyslab-1.0.0.vsix → SHA256 校验通过 → 已安装
 ```
+
+**当前最新发布：`v1.2.0`**（含离线代码补全，见第十节）：
+https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.2.0 —— 附件同样是 7 个
+（4 个 `StKGC.*` 同元扩展 + `StKGC.vscodewithsyslab-1.2.0.vsix` + `manifest.json` + `SHA256SUMS.txt`）。
 
 **把桥接扩展上架市场（可选，上架后扩展面板可搜索 + Settings Sync 自动同步）**：
 

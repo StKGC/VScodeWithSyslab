@@ -7,8 +7,9 @@
 > 发布时一把「打包 → 上传为 **GitHub Release 附件**」，其它机器用 `-GitHubRelease <owner/repo>@<tag>` /
 > `--github-release <owner/repo>@<tag>` 安装。仓库里只放源码与脚本。
 >
-> 本仓库当前发布：**`StKGC/VScodeWithSyslab` @ `v1.0.0`**（私有），
-> 附件 = 4 个同元扩展 + `StKGC.vscodewithsyslab-1.0.0.vsix` + `manifest.json` + `SHA256SUMS.txt`。
+> 本仓库当前发布：**`StKGC/VScodeWithSyslab` @ `v1.2.0`**（私有，见
+> https://github.com/StKGC/VScodeWithSyslab/releases/latest ），
+> 附件 = 4 个同元扩展 + `StKGC.vscodewithsyslab-1.2.0.vsix` + `manifest.json` + `SHA256SUMS.txt`（共 7 个）。
 
 ---
 
@@ -45,7 +46,7 @@ release/
 ├─ StKGC.julia-analyzer-26.4.0.vsix
 ├─ StKGC.tymlang-ide-26.1.0.vsix
 ├─ StKGC.app-designer-26.1.0.vsix
-└─ StKGC.vscodewithsyslab-1.0.0.vsix   # 本工具包自带（MIT）
+└─ StKGC.vscodewithsyslab-1.2.0.vsix   # 本工具包自带（MIT）
 ```
 
 ---
@@ -55,26 +56,26 @@ release/
 ```powershell
 # 打包 + 创建/更新 Release 并上传附件（私有仓库自动使用 git 凭据管理器里的令牌）
 powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 `
-    -PackVersion 1.0.0 `
+    -PackVersion 1.2.0 `
     -PublishGitHub StKGC/VScodeWithSyslab `
-    -Tag v1.0.0
+    -Tag v1.2.0
 
 # 只打包不上传（本地/其它渠道分发时用）
-powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -PackVersion 1.0.1 -Zip
+powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -PackVersion 1.2.1 -Zip
 ```
 
 参数：
 
-* `-PackVersion`：发布包版本（本仓库用扩展版本号，如 `1.0.0`；也可用 `年.月日`）
+* `-PackVersion`：发布包版本（本仓库用扩展版本号，如 `1.2.0`；也可用 `年.月日`）
 * `-PublishGitHub <owner/repo>`：上传为 Release 附件；`-Tag` 默认 `v<PackVersion>`
 * `-Token`：GitHub 令牌（默认取 `$env:GITHUB_TOKEN` / `$env:GH_TOKEN` / git 凭据管理器）
 * `-IncludeCopilot`：把 MWORKS Copilot 也打进去（需要 Syslab 账号/服务器，默认不含）
 * `-Zip`：额外打 zip；`-IncludeZipInRelease` 连 zip 一起上传
 
-上传结果（本仓库 v1.0.0 实测）：
+上传结果（本仓库最新一次 `v1.2.0` 实测）：
 
 ```
-Release: https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.0.0
+Release: https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.2.0
 附件   : 7 个（5 VSIX + manifest.json + SHA256SUMS.txt，约 76 MB）
 ```
 
@@ -87,16 +88,16 @@ Release: https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.0.0
 ```powershell
 # Windows
 powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
-    -GitHubRelease StKGC/VScodeWithSyslab@v1.0.0
+    -GitHubRelease StKGC/VScodeWithSyslab@v1.2.0
 #   私有仓库：脚本自动取 git 凭据；也可显式 -Token $env:GITHUB_TOKEN
 #   只装桥接扩展：加 -OnlyBridge
 
 # Linux / macOS
-./install.sh --github-release StKGC/VScodeWithSyslab@v1.0.0
+./install.sh --github-release StKGC/VScodeWithSyslab@v1.2.0
 #   私有仓库加 --token <PAT>
 ```
 
-实测输出：
+实测输出（v1.0.0 首版记录的原始输出，流程与各版本一致）：
 
 ```
 === 1/4 获取扩展发布包 ===  GitHub Release：StKGC/VScodeWithSyslab@v1.0.0（已带令牌）

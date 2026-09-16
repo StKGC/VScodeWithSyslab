@@ -7,11 +7,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BlackTea-Lee/VScodeWithSyslab.git"
+    "url": "https://github.com/StKGC/VScodeWithSyslab.git"
   },
-  "homepage": "https://github.com/BlackTea-Lee/VScodeWithSyslab#readme",
+  "homepage": "https://github.com/StKGC/VScodeWithSyslab#readme",
   "bugs": {
-    "url": "https://github.com/BlackTea-Lee/VScodeWithSyslab/issues"
+    "url": "https://github.com/StKGC/VScodeWithSyslab/issues"
   },
   "engines": {
     "vscode": "^1.75.0"

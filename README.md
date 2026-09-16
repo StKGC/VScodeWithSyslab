@@ -1,7 +1,7 @@
 # VScodeWithSyslab
 
 > 项目名 / 仓库名：**VScodeWithSyslab** ｜ 扩展 ID：`StKGC.vscodewithsyslab`（安装后显示为 `stkgc.vscodewithsyslab`）
-> 仓库：https://github.com/BlackTea-Lee/VScodeWithSyslab （私有）
+> 仓库：https://github.com/StKGC/VScodeWithSyslab （私有）
 
 让 **MWORKS.Syslab** 的编辑器与脚本运行能力在**原生 VS Code** 里可用：
 用 VS Code 打开/编辑 `.jl`、`.m/.tym` 文件，直接调用 Syslab 自带的 Julia 运行时与全部
@@ -254,15 +254,15 @@ code --install-extension vsix\StKGC.vscodewithsyslab-1.0.0.vsix --force
 ```powershell
 # ① 打包 + 上传为 GitHub Release 附件（私有仓库自动使用 git 已保存的凭据）
 powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 `
-    -PackVersion 1.0.0 -PublishGitHub BlackTea-Lee/VScodeWithSyslab -Tag v1.0.0
+    -PackVersion 1.0.0 -PublishGitHub StKGC/VScodeWithSyslab -Tag v1.0.0
 
 # ② 其它机器安装（Windows）：下载 + SHA256 校验 + 安装 + 写环境，一步到位
 powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
-    -GitHubRelease BlackTea-Lee/VScodeWithSyslab@v1.0.0
+    -GitHubRelease StKGC/VScodeWithSyslab@v1.0.0
 #   私有仓库会自动取 git 凭据（也可显式 -Token / $env:GITHUB_TOKEN）；只装桥接扩展加 -OnlyBridge
 
 # ② 其它机器安装（Linux / macOS）
-./install.sh --github-release BlackTea-Lee/VScodeWithSyslab@v1.0.0
+./install.sh --github-release StKGC/VScodeWithSyslab@v1.0.0
 ```
 
 其它分发方式（对象存储 / 内网 nginx / 网盘 / 仓库内 raw）与私有仓库注意事项见 `cloud\PUBLISH.md`；
@@ -271,7 +271,7 @@ powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
 实测（Release 附件下载 + 校验 + 安装）：
 
 ```
-Release: https://github.com/BlackTea-Lee/VScodeWithSyslab/releases/tag/v1.0.0
+Release: https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.0.0
 附件   : StKGC.syslab-julia-26.1.0.vsix / julia-analyzer / tymlang-ide / app-designer
          StKGC.vscodewithsyslab-1.0.0.vsix / manifest.json / SHA256SUMS.txt
 安装   : 已下载 manifest.json → 下载 StKGC.vscodewithsyslab-1.0.0.vsix → SHA256 校验通过 → 已安装

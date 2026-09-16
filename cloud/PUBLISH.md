@@ -7,7 +7,7 @@
 > 发布时一把「打包 → 上传为 **GitHub Release 附件**」，其它机器用 `-GitHubRelease <owner/repo>@<tag>` /
 > `--github-release <owner/repo>@<tag>` 安装。仓库里只放源码与脚本。
 >
-> 本仓库当前发布：**`BlackTea-Lee/VScodeWithSyslab` @ `v1.0.0`**（私有），
+> 本仓库当前发布：**`StKGC/VScodeWithSyslab` @ `v1.0.0`**（私有），
 > 附件 = 4 个同元扩展 + `StKGC.vscodewithsyslab-1.0.0.vsix` + `manifest.json` + `SHA256SUMS.txt`。
 
 ---
@@ -56,7 +56,7 @@ release/
 # 打包 + 创建/更新 Release 并上传附件（私有仓库自动使用 git 凭据管理器里的令牌）
 powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 `
     -PackVersion 1.0.0 `
-    -PublishGitHub BlackTea-Lee/VScodeWithSyslab `
+    -PublishGitHub StKGC/VScodeWithSyslab `
     -Tag v1.0.0
 
 # 只打包不上传（本地/其它渠道分发时用）
@@ -74,7 +74,7 @@ powershell -ExecutionPolicy Bypass -File scripts\Pack-ExtensionRelease.ps1 -Pack
 上传结果（本仓库 v1.0.0 实测）：
 
 ```
-Release: https://github.com/BlackTea-Lee/VScodeWithSyslab/releases/tag/v1.0.0
+Release: https://github.com/StKGC/VScodeWithSyslab/releases/tag/v1.0.0
 附件   : 7 个（5 VSIX + manifest.json + SHA256SUMS.txt，约 76 MB）
 ```
 
@@ -87,19 +87,19 @@ Release: https://github.com/BlackTea-Lee/VScodeWithSyslab/releases/tag/v1.0.0
 ```powershell
 # Windows
 powershell -ExecutionPolicy Bypass -File scripts\Install-ExtensionPack.ps1 `
-    -GitHubRelease BlackTea-Lee/VScodeWithSyslab@v1.0.0
+    -GitHubRelease StKGC/VScodeWithSyslab@v1.0.0
 #   私有仓库：脚本自动取 git 凭据；也可显式 -Token $env:GITHUB_TOKEN
 #   只装桥接扩展：加 -OnlyBridge
 
 # Linux / macOS
-./install.sh --github-release BlackTea-Lee/VScodeWithSyslab@v1.0.0
+./install.sh --github-release StKGC/VScodeWithSyslab@v1.0.0
 #   私有仓库加 --token <PAT>
 ```
 
 实测输出：
 
 ```
-=== 1/4 获取扩展发布包 ===  GitHub Release：BlackTea-Lee/VScodeWithSyslab@v1.0.0（已带令牌）
+=== 1/4 获取扩展发布包 ===  GitHub Release：StKGC/VScodeWithSyslab@v1.0.0（已带令牌）
                             已下载 manifest.json / 下载 StKGC.vscodewithsyslab-1.0.0.vsix
 === 2/4 校验扩展包 ===      manifest.json：syslab-vscode-pack 1.0.0 · SHA256 校验通过
 === 3/4 安装到 VS Code ===  已安装 StKGC.vscodewithsyslab-1.0.0.vsix

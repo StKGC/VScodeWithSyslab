@@ -115,6 +115,7 @@ MWORKS\
 │   ├─ Push-ViaGitHubApi.ps1     git push 被网络阻断时，改用 GitHub API 推送（SHA 与本地一致，不分叉）
 │   ├─ Update-PreloadEnum.ps1    按当前环境刷新「预加载包」设置页的下拉候选（enum）
 │   ├─ update-preload-enum.js    上者的 Node 实现（安全改写已安装扩展的 package.json）
+│   ├─ Set-LintMode.ps1          调整 Julia 静态检查严格度（quiet/balanced/strict）
 │   ├─ Test-SyslabEnv.ps1       环境自检
 │   ├─ Run-SyslabScript.ps1     命令行运行 .jl 脚本（批处理/CI 可用）
 │   └─ check-syntax.js          开发辅助：校验扩展 JS/JSON 语法
@@ -202,6 +203,31 @@ Syslab 扩展是按 Syslab 自己的外壳写的，直接搬到原生 VS Code �
 **4. 首次加载包很慢？**
 TyBase/TyMath/TyPlot 首次加载需要预编译（本机约 10 秒，冷启动可能更久），之后走
 `JULIA_DEPOT_PATH/compiled` 缓存。
+
+**4′. 编辑器报 `xxx(MissingRef)` / “未定义的全局变量”，是环境坏了吗？**
+不是。纯 VS Code 里有两套静态检查在工作，它们**只做静态推断**，看不到运行时的动态绑定：
+
+| 诊断来源 | 例子 | 由谁控制 |
+| --- | --- | --- |
+| `StKGC.syslab-julia` 自带 linter（julia-vscode / StaticLint 血统） | `figureJulia(MissingRef)`、未定义引用 | `julia.lint.*`（`julia.lint.run`、`julia.lint.missingrefs`） |
+| `StKGC.julia-analyzer`（独立二进制） | “未定义的全局变量 'VERSION'”、“类型不稳定” | `julia-analyzer.*` |
+
+先分清两种情况：
+
+1. **符号确实不存在** → 改代码。例如本机 TyPlot 只有 `figure()`/`gcf()`，**没有** `figureJulia()`
+   （在 TyPlot/TyBase/TyPlot2/TyPlotCore/TyMathPlot 与 Syslab 安装目录里都搜不到这个名字）；
+2. **符号存在但静态检查看不到**（宏生成、`include` 到别处的函数、动态加载的包、只有运行时才绑定的名字）
+   → 用档位脚本收敛噪音：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\Set-LintMode.ps1 -Show            # 看当前设置
+powershell -ExecutionPolicy Bypass -File scripts\Set-LintMode.ps1 -Mode balanced   # 推荐：关掉误报较多的“类型不稳定/类型检查”
+powershell -ExecutionPolicy Bypass -File scripts\Set-LintMode.ps1 -Mode quiet      # 关掉两套 linter 的未定义引用检查
+powershell -ExecutionPolicy Bypass -File scripts\Set-LintMode.ps1 -Mode strict     # 全开（missingrefs=all + 类型检查）
+```
+
+改完在 VS Code 里 `Developer: Reload Window` 生效（或直接改设置：`julia.lint.missingrefs` 设为
+`none` 只关这一类检查）。
 
 **5. `.m` 文件被 MATLAB 扩展抢走？**
 `.m` 同时被 `mathworks.language-matlab` 与 `StKGC.tymlang-ide` 声明。可在 VS Code
